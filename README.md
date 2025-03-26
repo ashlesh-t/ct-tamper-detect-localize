@@ -18,9 +18,9 @@ This project focuses on detecting AI-manipulated medical images and accurately l
 
 ## Authors
 - Ashlesha T - [GitHub Profile](https://github.com/ASHLESHA05)
-- Author 2 - [GitHub Profile](https://github.com/author2)
-- Author 3 - [GitHub Profile](https://github.com/author3)
-- Author 4 - [GitHub Profile](https://github.com/author4)
+- Varun S - [GitHub Profile](https://github.com/varuns2903)
+- Vignesh - [GitHub Profile](https://github.com/Vignesh3613)
+- Shubhangi Vats - [GitHub Profile](https://github.com)
 
 ## Contributing
 Contributions are welcome! Please follow these steps:
