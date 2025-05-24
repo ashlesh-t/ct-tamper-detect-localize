@@ -41,3 +41,11 @@ for lobe_name, path in lobe_files.items():
 print("Sampled tumor injection coordinates (x, y, z, lobe):")
 for coord in final_coords:
     print(coord)
+
+
+
+'''
+pip install TotalSegmentator
+totalsegmentator -i your_input_dicom_folder -o output_folder --fast
+# This eill get the plausible tumour location coord
+'''
