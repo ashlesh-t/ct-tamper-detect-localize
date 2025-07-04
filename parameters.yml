@@ -1,0 +1,66 @@
+# ================================
+# DATA LOCATIONS
+# ================================
+
+healthy:
+  scans_raw: "D:/YourPath/NormalCasesFolder"
+  coords_csv: "D:/YourPath/healthy_coords.csv"
+  samples_file: "D:/YourPath/output/healthy_samples.npy"
+  chunks:
+    - "D:/YourPath/chunks/chunk1/healthy_samples.npy"
+    - "D:/YourPath/chunks/chunk2/healthy_samples.npy"
+    - "D:/YourPath/chunks/chunk3/healthy_samples.npy"
+    - "D:/YourPath/chunks/chunk4/healthy_samples.npy"
+
+unhealthy:
+  scans_raw: "D:/YourPath/UnhealthyCasesFolder"
+  coords_csv: "D:/YourPath/unhealthy_coords.csv"
+  samples_file: "D:/YourPath/output/unhealthy_samples.npy"
+  chunks:
+    - "D:/YourPath/chunks/chunk1/unhealthy_samples.npy"
+    - "D:/YourPath/chunks/chunk2/unhealthy_samples.npy"
+    - "D:/YourPath/chunks/chunk3/unhealthy_samples.npy"
+    - "D:/YourPath/chunks/chunk4/unhealthy_samples.npy"
+
+# ================================
+# MODEL / OUTPUT PATHS
+# ================================
+
+base_path: "D:/YourPath/CT-GAN"
+modelpath_inject: "D:/YourPath/output/models/injector"
+modelpath_remove: "D:/YourPath/output/models/remover"
+progress: "D:/YourPath/output/progress"
+
+# ================================
+# GAN HYPERPARAMETERS
+# ================================
+
+cube_shape: [32, 32, 32]
+mask_xlims: [6, 26]
+mask_ylims: [6, 26]
+mask_zlims: [6, 26]
+copynoise: true
+
+generator_filters: 100
+discriminator_filters: 100
+use_residual_blocks: true
+use_spectral_norm: true
+dropout: 0.5
+batch_norm_momentum: 0.8
+leaky_relu_slope: 0.2
+conv_kernel_size: 4
+conv_stride: 2
+conv_padding: 1
+final_kernel_size: 4
+final_stride: 1
+
+lambda_pixel: 100
+lr_generator: 0.0001
+lr_discriminator: 0.0002
+betas: [0.5, 0.999]
+loss_function: "MSELoss"
+
+channels: 1
+num_classes: 5
+
+isDataTrainChunks: true
