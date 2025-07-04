@@ -175,8 +175,8 @@ Do for all chunks.
 Add this cell in your notebook:
 
 ```python
-!git clone https://github.com/YOUR_USERNAME/ct-gan.git
-%cd ct-gan
+!git clone -b generate-tampered https://github.com/ASHLESHA05/Detect-and-Locate-Tampered-Medical-Images.git
+%cd Detect-and-Locate-Tampered-Medical-Images
 ```
 
 ✅ Replace with your repo URL if different.
