@@ -1,7 +1,6 @@
 import os
 import xml.etree.ElementTree as ET
 import pandas as pd
-import pydicom as pdy
 from pathlib import Path
 
 # Main LIDC dataset folder
@@ -11,42 +10,38 @@ main_folder = r"/media/ashu/Ashlesh/CapstoneProject/DataSet/LungsCT-BigData/mani
 namespace = {'ns': 'http://www.nih.gov'}
 
 # Output CSV path
-csv_filename = Path('~/capstone/DataStore/centroids_cancer.csv').expanduser()
+csv_filename = Path('centroids_cancer.csv').expanduser()
 os.makedirs(csv_filename.parent, exist_ok=True)
 
-# Set to store unique (filename, x, y, z)
-csv_data = set()
+# Dictionary: key = (series_folder, tumor_id), value = list of (x, y, z)
+tumor_points = {}
 
-# Function to calculate centroid of an ROI
-def calculate_centroid(roi):
-    x_coords = []
-    y_coords = []
-    edges = roi.findall("ns:edgeMap", namespace)
-    for edge in edges:
-        x_coord = edge.find("ns:xCoord", namespace)
-        y_coord = edge.find("ns:yCoord", namespace)
-        if x_coord is not None and y_coord is not None:
+def calculate_centroid_for_roi(roi):
+    """Calculate centroid (x, y) for one ROI slice."""
+    x_coords, y_coords = [], []
+    for edge in roi.findall("ns:edgeMap", namespace):
+        x_elem = edge.find("ns:xCoord", namespace)
+        y_elem = edge.find("ns:yCoord", namespace)
+        if x_elem is not None and y_elem is not None:
             try:
-                x_coords.append(float(x_coord.text))
-                y_coords.append(float(y_coord.text))
+                x_coords.append(float(x_elem.text))
+                y_coords.append(float(y_elem.text))
             except (TypeError, ValueError):
                 continue
     if x_coords and y_coords:
         return sum(x_coords) / len(x_coords), sum(y_coords) / len(y_coords)
     return None, None
 
-
-# Function to extract centroid & z from XML
-def extract_data_from_xml(files, xml_path, series_folder):
+def extract_data_from_xml(xml_path, series_folder):
     try:
         tree = ET.parse(xml_path)
         root = tree.getroot()
 
         # Find all nodules
         unblinded_nodules = root.findall(".//ns:unblindedReadNodule", namespace)
-        for unblinded_nodule in unblinded_nodules:
+        for tumor_id, unblinded_nodule in enumerate(unblinded_nodules, start=1):
 
-            # Only include nodules with malignancy >= 4
+            # Check malignancy
             characteristics = unblinded_nodule.find("ns:characteristics", namespace)
             if characteristics is None:
                 continue
@@ -60,23 +55,24 @@ def extract_data_from_xml(files, xml_path, series_folder):
             if malignancy < 4:
                 continue  # Skip benign/uncertain nodules
 
+            # Collect all slice centroids for this tumor
             rois = unblinded_nodule.findall("ns:roi", namespace)
             for roi in rois:
                 image_z_elem = roi.find("ns:imageZposition", namespace)
                 if image_z_elem is None:
                     continue
+                try:
+                    image_z = float(image_z_elem.text)
+                except ValueError:
+                    continue
 
-                image_z = image_z_elem.text
-                centroid_x, centroid_y = calculate_centroid(roi)
-
+                centroid_x, centroid_y = calculate_centroid_for_roi(roi)
                 if centroid_x is not None and centroid_y is not None:
-                    csv_data.add((series_folder, centroid_x, centroid_y, image_z))
+                    tumor_points.setdefault((series_folder, tumor_id), []).append((centroid_x, centroid_y, image_z))
 
     except Exception as e:
         print(f"Error processing XML {xml_path}: {e}")
 
-
-# Traverse all subfolders and XMLs
 print(f"Scanning dataset under: {main_folder}")
 for root, dirs, files in os.walk(main_folder):
     for file in files:
@@ -85,11 +81,19 @@ for root, dirs, files in os.walk(main_folder):
             parent_folder = os.path.basename(os.path.dirname(root))
             series_folder = os.path.basename(root)
             xml_file_path = os.path.join(root, file)
+            extract_data_from_xml(xml_file_path, f"{parts}/{parent_folder}/{series_folder}")
 
-            extract_data_from_xml(files, xml_file_path, f"{parts}/{parent_folder}/{series_folder}")
+# Compute one centroid per tumor
+final_data = []
+for (series_folder, _tumor_id), points in tumor_points.items():
+    xs, ys, zs = zip(*points)
+    centroid_x = sum(xs) / len(xs)
+    centroid_y = sum(ys) / len(ys)
+    centroid_z = sum(zs) / len(zs)
+    final_data.append((series_folder, centroid_x, centroid_y, centroid_z))
 
-# Save to CSV
-df = pd.DataFrame(sorted(csv_data), columns=["filename", "x", "y", "z"])
+# Save to CSV in the same format as before
+df = pd.DataFrame(final_data, columns=["filename", "x", "y", "z"])
 df.to_csv(csv_filename, index=False)
 
 print(f"\nCSV file saved to: {csv_filename}")
