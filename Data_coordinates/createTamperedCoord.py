@@ -2,22 +2,24 @@ import os
 import xml.etree.ElementTree as ET
 import pandas as pd
 from pathlib import Path
+import pydicom
+import numpy as np
+from collections import defaultdict
 
-# Main LIDC dataset folder
-main_folder = r"/media/ashu/Ashlesh/CapstoneProject/DataSet/LungsCT-BigData/manifest-1600709154662/LIDC-IDRI"
+# Main dataset folder
+main_folder = Path("/mnt/mydata/main")  # UUID folders with DICOMs + XML
 
-# Namespace used in the XML files
+# Namespace in XML files
 namespace = {'ns': 'http://www.nih.gov'}
 
-# Output CSV path
-csv_filename = Path('centroids_cancer.csv').expanduser()
+# Output CSV
+csv_filename = Path("centroids_cancer_unique.csv").expanduser()
 os.makedirs(csv_filename.parent, exist_ok=True)
 
-# Dictionary: key = (series_folder, tumor_id), value = list of (x, y, z)
-tumor_points = {}
+# Dictionary: key = uuid_folder, value = dict(slice_number -> list of (x, y))
+tumor_slices = defaultdict(lambda: defaultdict(list))
 
 def calculate_centroid_for_roi(roi):
-    """Calculate centroid (x, y) for one ROI slice."""
     x_coords, y_coords = [], []
     for edge in roi.findall("ns:edgeMap", namespace):
         x_elem = edge.find("ns:xCoord", namespace)
@@ -29,18 +31,39 @@ def calculate_centroid_for_roi(roi):
             except (TypeError, ValueError):
                 continue
     if x_coords and y_coords:
-        return sum(x_coords) / len(x_coords), sum(y_coords) / len(y_coords)
+        return sum(x_coords)/len(x_coords), sum(y_coords)/len(y_coords)
     return None, None
 
-def extract_data_from_xml(xml_path, series_folder):
+def get_dicom_slices(uuid_folder_path):
+    dicom_files = [f for f in os.listdir(uuid_folder_path) if f.lower().endswith(".dcm")]
+    slices = []
+    for f in dicom_files:
+        try:
+            ds = pydicom.dcmread(os.path.join(uuid_folder_path, f), stop_before_pixels=True)
+            z = float(ds.ImagePositionPatient[2])
+            instance = int(ds.InstanceNumber)
+            slices.append((z, instance))
+        except Exception:
+            continue
+    slices.sort(key=lambda x: x[0])
+    return slices
+
+def find_closest_slice(z_value, dicom_slices):
+    z_array = np.array([s[0] for s in dicom_slices])
+    idx = (np.abs(z_array - z_value)).argmin()
+    return dicom_slices[idx][1]
+
+def extract_data_from_xml(xml_path, uuid_folder_path):
     try:
+        dicom_slices = get_dicom_slices(uuid_folder_path)
+        if not dicom_slices:
+            return
+
         tree = ET.parse(xml_path)
         root = tree.getroot()
-
-        # Find all nodules
         unblinded_nodules = root.findall(".//ns:unblindedReadNodule", namespace)
-        for tumor_id, unblinded_nodule in enumerate(unblinded_nodules, start=1):
 
+        for unblinded_nodule in unblinded_nodules:
             # Check malignancy
             characteristics = unblinded_nodule.find("ns:characteristics", namespace)
             if characteristics is None:
@@ -49,52 +72,51 @@ def extract_data_from_xml(xml_path, series_folder):
             if malignancy_elem is None or not malignancy_elem.text:
                 continue
             try:
-                malignancy = int(malignancy_elem.text)
+                malignancy = int(malignancy_elem.text)  
             except ValueError:
                 continue
-            if malignancy < 4:
-                continue  # Skip benign/uncertain nodules
+            if malignancy >= 4:
+                continue
 
-            # Collect all slice centroids for this tumor
             rois = unblinded_nodule.findall("ns:roi", namespace)
             for roi in rois:
-                image_z_elem = roi.find("ns:imageZposition", namespace)
-                if image_z_elem is None:
+                centroid_x, centroid_y = calculate_centroid_for_roi(roi)
+                if centroid_x is None or centroid_y is None:
+                    continue
+                z_elem = roi.find("ns:imageZposition", namespace)
+                if z_elem is None or not z_elem.text:
                     continue
                 try:
-                    image_z = float(image_z_elem.text)
+                    roi_z = float(z_elem.text)
                 except ValueError:
                     continue
 
-                centroid_x, centroid_y = calculate_centroid_for_roi(roi)
-                if centroid_x is not None and centroid_y is not None:
-                    tumor_points.setdefault((series_folder, tumor_id), []).append((centroid_x, centroid_y, image_z))
+                slice_number = find_closest_slice(roi_z, dicom_slices)
+                tumor_slices[uuid_folder_path.name][slice_number].append((centroid_x, centroid_y))
 
     except Exception as e:
         print(f"Error processing XML {xml_path}: {e}")
 
-print(f"Scanning dataset under: {main_folder}")
-for root, dirs, files in os.walk(main_folder):
+# Walk dataset
+for root_dir, dirs, files in os.walk(main_folder):
     for file in files:
-        if file.endswith(".xml"):
-            parts = os.path.normpath(root).split(os.sep)[-3]
-            parent_folder = os.path.basename(os.path.dirname(root))
-            series_folder = os.path.basename(root)
-            xml_file_path = os.path.join(root, file)
-            extract_data_from_xml(xml_file_path, f"{parts}/{parent_folder}/{series_folder}")
+        if file.lower().endswith(".xml"):
+            uuid_folder_path = Path(root_dir)
+            xml_file_path = os.path.join(root_dir, file)
+            extract_data_from_xml(xml_file_path, uuid_folder_path)
 
-# Compute one centroid per tumor
-final_data = []
-for (series_folder, _tumor_id), points in tumor_points.items():
-    xs, ys, zs = zip(*points)
-    centroid_x = sum(xs) / len(xs)
-    centroid_y = sum(ys) / len(ys)
-    centroid_z = sum(zs) / len(zs)
-    final_data.append((series_folder, centroid_x, centroid_y, centroid_z))
+# Prepare final data: one row per slice, average x,y for duplicates
+final_rows = []
+for uuid, slices_dict in tumor_slices.items():
+    for slice_num in sorted(slices_dict.keys()):
+        points = slices_dict[slice_num]
+        avg_x = sum(p[0] for p in points)/len(points)
+        avg_y = sum(p[1] for p in points)/len(points)
+        final_rows.append((uuid, avg_x, avg_y, slice_num))
 
-# Save to CSV in the same format as before
-df = pd.DataFrame(final_data, columns=["filename", "x", "y", "z"])
+# Save CSV
+df = pd.DataFrame(final_rows, columns=["filename", "x", "y", "slice_number"])
 df.to_csv(csv_filename, index=False)
 
-print(f"\nCSV file saved to: {csv_filename}")
-print(f"Total malignant tumor centroids: {len(df)}")
+print(f"\nCSV saved to: {csv_filename}")
+print(f"Total rows: {len(df)}")

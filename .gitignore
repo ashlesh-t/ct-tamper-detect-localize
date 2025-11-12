@@ -73,7 +73,8 @@ dmypy.json
 
 # Logs
 *.log
-
+*.pth
+*.npy
 # Other
 pip-log.txt
 pip-delete-this-directory.txt

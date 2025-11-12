@@ -1,2 +1,5 @@
 pandas
 pydicom
+numpy==1.26.4
+segmentation_models_pytorch
+albumentations
