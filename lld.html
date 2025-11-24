@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Capstone LLD — 2x2 Grid Layout</title>
+  <style>
+    :root{
+      --bg:#ffffff;
+      --card:#f8fafc;
+      --text:#1e293b;
+      --border:#cbd5e1;
+      --accent:#2563eb;
+      --conv:#e0f2fe; --conv-stroke:#38bdf8;
+      --pool:#ffedd5; --pool-stroke:#fb923c;
+      --fc:#f3e8ff; --fc-stroke:#c084fc;
+      --norm:#f1f5f9; --norm-stroke:#94a3b8;
+      --attn:#fce7f3; --attn-stroke:#f472b6;
+    }
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI', Roboto, Helvetica, Arial, sans-serif;margin:0;padding:20px}
+    .wrap{max-width:1400px;margin:0 auto;background:white;padding:30px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.06);border:1px solid #e2e8f0}
+    .header{border-bottom:2px solid #f1f5f9;padding-bottom:20px;margin-bottom:30px;display:flex;justify-content:space-between;align-items:center}
+    .title{font-size:24px;font-weight:800;color:#0f172a}
+    .legend{display:flex;gap:15px;font-size:12px;margin-top:8px;color:#475569}
+    .dot{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:5px;border:1px solid rgba(0,0,0,0.1)}
+    button{background:#0f172a;color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-weight:600;font-size:14px;transition:0.2s}
+    button:hover{background:#334155}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <div class="title">LLD Technical Blueprints: 2x2 Grid View</div>
+      <div style="font-size:14px;color:#64748b;margin-top:4px">Optimized layout for report documentation (Landscape)</div>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--conv);border-color:var(--conv-stroke)"></span>Conv/Backbone</span>
+        <span><span class="dot" style="background:var(--pool);border-color:var(--pool-stroke)"></span>Pool/Upsample</span>
+        <span><span class="dot" style="background:var(--fc);border-color:var(--fc-stroke)"></span>Linear/FC</span>
+        <span><span class="dot" style="background:var(--attn);border-color:var(--attn-stroke)"></span>Attention (SE/CBAM)</span>
+      </div>
+    </div>
+    <button onclick="downloadLLD()">Download Grid Blueprint (SVG)</button>
+  </div>
+
+  <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc">
+    <svg id="lldSvg" viewBox="0 0 1400 2200" width="1400" height="2200" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#64748b"/></marker>
+        <style>
+          .section-title { font-size: 18px; font-weight: bold; fill: #0f172a; }
+          .tensor { font-size: 11px; fill: #166534; font-family: monospace; font-weight: bold; }
+          .op-text { font-size: 12px; fill: #334155; font-weight: bold; }
+          .param-text { font-size: 10px; fill: #64748b; font-family: sans-serif; }
+          
+          .block-conv { fill: var(--conv); stroke: var(--conv-stroke); stroke-width: 1.5; rx: 6; }
+          .block-pool { fill: var(--pool); stroke: var(--pool-stroke); stroke-width: 1.5; rx: 6; }
+          .block-fc { fill: var(--fc); stroke: var(--fc-stroke); stroke-width: 1.5; rx: 6; }
+          .block-norm { fill: var(--norm); stroke: var(--norm-stroke); stroke-width: 1.5; rx: 6; }
+          .block-attn { fill: var(--attn); stroke: var(--attn-stroke); stroke-width: 1.5; rx: 6; }
+          
+          .container { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1; rx: 8; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.03)); }
+          .line { stroke: #94a3b8; stroke-width: 1.5; marker-end: url(#arrow); fill: none; }
+          .dashed { stroke-dasharray: 4; }
+          
+          /* Panel positions */
+          /* M1: Top Left (20, 20) */
+          /* M2: Top Right (720, 20) */
+          /* M3: Bottom Left (20, 1100) */
+          /* M4: Bottom Right (720, 1100) */
+        </style>
+      </defs>
+
+      <g transform="translate(20, 20)">
+        <rect x="0" y="0" width="660" height="1000" class="container" />
+        <text x="330" y="40" text-anchor="middle" class="section-title">Model 1: Dual-Stream Detection</text>
+        <line x1="20" y1="55" x2="640" y2="55" stroke="#e2e8f0" stroke-width="2" />
+
+        <g transform="translate(40, 70)">
+          <rect x="50" y="0" width="200" height="30" class="block-norm"/>
+          <text x="150" y="20" text-anchor="middle" class="op-text">Input (Spatial)</text>
+          <text x="150" y="45" text-anchor="middle" class="tensor">(B, 3, 224, 224)</text>
+
+          <line x1="150" y1="50" x2="150" y2="70" class="line"/>
+
+          <rect x="30" y="70" width="240" height="320" fill="#f8fafc" stroke="#e2e8f0" rx="8"/>
+          <text x="150" y="90" text-anchor="middle" fill="#64748b" font-size="11" font-weight="bold">EfficientNet-B3 Backbone</text>
+
+          <rect x="50" y="110" width="200" height="30" class="block-conv"/>
+          <text x="150" y="130" text-anchor="middle" class="param-text">Stem: Conv3x3, s=2</text>
+          
+          <rect x="50" y="160" width="200" height="30" class="block-conv"/>
+          <text x="150" y="180" text-anchor="middle" class="param-text">MBConv1-5 Stacks</text>
+          
+          <rect x="50" y="210" width="200" height="30" class="block-attn"/>
+          <text x="150" y="230" text-anchor="middle" class="param-text">SE Attention (in blocks)</text>
+          
+          <rect x="50" y="260" width="200" height="30" class="block-conv"/>
+          <text x="150" y="280" text-anchor="middle" class="param-text">MBConv6: c=384</text>
+          
+          <rect x="50" y="310" width="200" height="30" class="block-conv"/>
+          <text x="150" y="330" text-anchor="middle" class="param-text">Pointwise: c=1536</text>
+
+          <line x1="150" y1="390" x2="150" y2="420" class="line"/>
+
+          <rect x="50" y="420" width="200" height="30" class="block-pool"/>
+          <text x="150" y="440" text-anchor="middle" class="op-text">AdaptiveAvgPool</text>
+          <text x="150" y="465" text-anchor="middle" class="tensor">(B, 1536)</text>
+        </g>
+
+        <g transform="translate(350, 70)">
+           <rect x="50" y="0" width="200" height="30" class="block-norm"/>
+           <text x="150" y="20" text-anchor="middle" class="op-text">Input (Freq Feats)</text>
+           <text x="150" y="45" text-anchor="middle" class="tensor">(B, 512)</text>
+           
+           <line x1="150" y1="50" x2="150" y2="100" class="line"/>
+
+           <rect x="50" y="100" width="200" height="40" class="block-fc"/>
+           <text x="150" y="125" text-anchor="middle" class="op-text">MLP Block 1</text>
+           
+           <line x1="150" y1="140" x2="150" y2="180" class="line"/>
+
+           <rect x="50" y="180" width="200" height="40" class="block-fc"/>
+           <text x="150" y="205" text-anchor="middle" class="op-text">MLP Block 2</text>
+           
+           <line x1="150" y1="220" x2="150" y2="420" class="line"/>
+           
+           <text x="150" y="440" text-anchor="middle" class="tensor">Out: (B, 128)</text>
+        </g>
+
+        <g transform="translate(190, 600)">
+           <rect x="0" y="0" width="280" height="180" fill="#f0f9ff" stroke="#bae6fd" rx="8"/>
+           <text x="140" y="20" text-anchor="middle" fill="#0369a1" font-weight="bold">Fusion Head</text>
+           
+           <path d="M 0 -70 L 140 30" class="line" fill="none" /> <path d="M 310 -70 L 140 30" class="line" fill="none" /> <rect x="40" y="40" width="200" height="30" class="block-fc"/>
+           <text x="140" y="60" text-anchor="middle" class="op-text">Concat (1664)</text>
+
+           <line x1="140" y1="70" x2="140" y2="90" class="line"/>
+           
+           <rect x="40" y="90" width="200" height="30" class="block-fc"/>
+           <text x="140" y="110" text-anchor="middle" class="op-text">FC Layers + Dropout</text>
+           
+           <rect x="40" y="135" width="200" height="30" class="block-fc" style="fill:#dbeafe;stroke:#3b82f6"/>
+           <text x="140" y="155" text-anchor="middle" class="op-text">Logits (2)</text>
+        </g>
+      </g>
+
+      <g transform="translate(720, 20)">
+        <rect x="0" y="0" width="660" height="1000" class="container" />
+        <text x="330" y="40" text-anchor="middle" class="section-title">Model 2: Ensemble Sub-Type</text>
+        <line x1="20" y1="55" x2="640" y2="55" stroke="#e2e8f0" stroke-width="2" />
+
+        <rect x="230" y="70" width="200" height="30" class="block-norm"/>
+        <text x="330" y="90" text-anchor="middle" class="op-text">Input (Multi-Ch)</text>
+        <text x="330" y="115" text-anchor="middle" class="tensor">(B, 3, 288, 288)</text>
+
+        <path d="M 330 115 L 140 160" class="line" />
+        <path d="M 330 115 L 520 160" class="line" />
+
+        <g transform="translate(40, 160)">
+           <rect x="0" y="0" width="200" height="280" fill="#f8fafc" stroke="#e2e8f0" rx="8"/>
+           <text x="100" y="20" text-anchor="middle" class="op-text">EfficientNet-B2</text>
+           
+           <rect x="20" y="40" width="160" height="30" class="block-conv"/>
+           <text x="100" y="60" text-anchor="middle" class="param-text">Backbone</text>
+           
+           <rect x="20" y="100" width="160" height="30" class="block-pool"/>
+           <text x="100" y="120" text-anchor="middle" class="op-text">GAP</text>
+           <text x="100" y="145" text-anchor="middle" class="tensor">(B, 1408)</text>
+           
+           <rect x="20" y="180" width="160" height="30" class="block-attn"/>
+           <text x="100" y="200" text-anchor="middle" class="op-text">Channel Attn</text>
+        </g>
+
+        <g transform="translate(420, 160)">
+           <rect x="0" y="0" width="200" height="280" fill="#f8fafc" stroke="#e2e8f0" rx="8"/>
+           <text x="100" y="20" text-anchor="middle" class="op-text">DenseNet-121</text>
+           
+           <rect x="20" y="40" width="160" height="30" class="block-conv"/>
+           <text x="100" y="60" text-anchor="middle" class="param-text">Dense Blocks</text>
+           
+           <rect x="20" y="100" width="160" height="30" class="block-pool"/>
+           <text x="100" y="120" text-anchor="middle" class="op-text">GAP</text>
+           <text x="100" y="145" text-anchor="middle" class="tensor">(B, 1024)</text>
+           
+           <rect x="20" y="180" width="160" height="30" class="block-attn"/>
+           <text x="100" y="200" text-anchor="middle" class="op-text">Channel Attn</text>
+        </g>
+
+        <g transform="translate(190, 500)">
+           <path d="M -50 -60 L 140 0" class="line" fill="none"/>
+           <path d="M 330 -60 L 140 0" class="line" fill="none"/>
+
+           <rect x="0" y="0" width="280" height="150" fill="#f0fdf4" stroke="#86efac" rx="8"/>
+           <text x="140" y="20" text-anchor="middle" fill="#166534" font-weight="bold">Ensemble Fusion</text>
+           
+           <rect x="40" y="40" width="200" height="30" class="block-fc"/>
+           <text x="140" y="60" text-anchor="middle" class="op-text">Concat (2432)</text>
+           
+           <line x1="140" y1="70" x2="140" y2="90" class="line"/>
+           
+           <rect x="40" y="90" width="200" height="30" class="block-fc"/>
+           <text x="140" y="110" text-anchor="middle" class="op-text">FC Stack -> 2 Logits</text>
+        </g>
+      </g>
+
+      <g transform="translate(20, 1100)">
+        <rect x="0" y="0" width="660" height="1000" class="container" />
+        <text x="330" y="40" text-anchor="middle" class="section-title">Model 3: Injection (UNet++ & KNN)</text>
+        <line x1="20" y1="55" x2="640" y2="55" stroke="#e2e8f0" stroke-width="2" />
+
+        <rect x="230" y="70" width="200" height="30" class="block-norm"/>
+        <text x="330" y="90" text-anchor="middle" class="op-text">Input (320x320)</text>
+
+        <g transform="translate(40, 140)">
+           <rect x="0" y="0" width="180" height="300" fill="#f8fafc" stroke="#e2e8f0" rx="8"/>
+           <text x="90" y="20" text-anchor="middle" class="op-text">ResNet-34 Enc</text>
+           <rect x="10" y="40" width="160" height="30" class="block-conv"/><text x="90" y="60" text-anchor="middle" class="param-text">Layer0 (s=2)</text>
+           <rect x="10" y="80" width="160" height="30" class="block-conv"/><text x="90" y="100" text-anchor="middle" class="param-text">Layer1</text>
+           <rect x="10" y="120" width="160" height="30" class="block-conv"/><text x="90" y="140" text-anchor="middle" class="param-text">Layer2 (s=2)</text>
+           <rect x="10" y="160" width="160" height="30" class="block-conv"/><text x="90" y="180" text-anchor="middle" class="param-text">Layer3 (s=2)</text>
+           <rect x="10" y="200" width="160" height="30" class="block-conv"/><text x="90" y="220" text-anchor="middle" class="param-text">Layer4 (s=2)</text>
+        </g>
+
+        <g transform="translate(440, 140)">
+           <rect x="0" y="0" width="180" height="300" fill="#fff7ed" stroke="#fdba74" rx="8"/>
+           <text x="90" y="20" text-anchor="middle" class="op-text">UNet++ Dec</text>
+           <rect x="10" y="40" width="160" height="30" class="block-pool"/><text x="90" y="60" text-anchor="middle" class="param-text">Nested Skip Upsample</text>
+           <rect x="10" y="80" width="160" height="30" class="block-conv"/><text x="90" y="100" text-anchor="middle" class="param-text">Conv3x3 Blocks</text>
+           <rect x="10" y="120" width="160" height="30" class="block-attn"/><text x="90" y="140" text-anchor="middle" class="param-text">SCSE Attention</text>
+        </g>
+        
+        <path d="M 220 200 L 440 200" class="line" stroke-dasharray="4" />
+        <text x="330" y="190" text-anchor="middle" class="param-text">Dense Skips</text>
+
+        <g transform="translate(190, 500)">
+           <rect x="0" y="0" width="280" height="200" fill="#fdf4ff" stroke="#f0abfc" rx="8"/>
+           <text x="140" y="20" text-anchor="middle" class="op-text">CBAM + KNN Head</text>
+           
+           <rect x="40" y="40" width="200" height="30" class="block-attn"/>
+           <text x="140" y="60" text-anchor="middle" class="op-text">CBAM Refinement</text>
+           
+           <line x1="140" y1="70" x2="140" y2="100" class="line"/>
+           
+           <rect x="40" y="100" width="200" height="30" class="block-fc"/>
+           <text x="140" y="120" text-anchor="middle" class="op-text">Projection (16-d)</text>
+           
+           <line x1="140" y1="130" x2="140" y2="150" class="line"/>
+           
+           <rect x="40" y="150" width="200" height="30" class="block-fc"/>
+           <text x="140" y="170" text-anchor="middle" class="op-text">Soft-KNN (Sim)</text>
+        </g>
+        
+        <text x="330" y="750" text-anchor="middle" class="tensor" font-size="14">Output: Mask (B, 1, 320, 320)</text>
+      </g>
+
+      <g transform="translate(720, 1100)">
+        <rect x="0" y="0" width="660" height="1000" class="container" />
+        <text x="330" y="40" text-anchor="middle" class="section-title">Model 4: Removal (Standard UNet)</text>
+        <line x1="20" y1="55" x2="640" y2="55" stroke="#e2e8f0" stroke-width="2" />
+
+        <rect x="230" y="70" width="200" height="30" class="block-norm"/>
+        <text x="330" y="90" text-anchor="middle" class="op-text">Input (320x320)</text>
+
+        <g transform="translate(40, 140)">
+           <rect x="0" y="0" width="180" height="300" fill="#f8fafc" stroke="#e2e8f0" rx="8"/>
+           <text x="90" y="20" text-anchor="middle" class="op-text">Encoder Stack</text>
+           <rect x="10" y="40" width="160" height="30" class="block-conv"/><text x="90" y="60" text-anchor="middle" class="param-text">Block1 (3->64)</text>
+           <rect x="10" y="80" width="160" height="30" class="block-pool"/><text x="90" y="100" text-anchor="middle" class="param-text">MaxPool</text>
+           <rect x="10" y="120" width="160" height="30" class="block-conv"/><text x="90" y="140" text-anchor="middle" class="param-text">Block2 (64->128)</text>
+           <rect x="10" y="160" width="160" height="30" class="block-pool"/><text x="90" y="180" text-anchor="middle" class="param-text">MaxPool</text>
+           <rect x="10" y="200" width="160" height="30" class="block-conv"/><text x="90" y="220" text-anchor="middle" class="param-text">Block3 (128->256)</text>
+           <rect x="10" y="240" width="160" height="30" class="block-conv"/><text x="90" y="260" text-anchor="middle" class="param-text">Block4 (256->512)</text>
+        </g>
+        
+        <g transform="translate(230, 460)">
+           <rect x="0" y="0" width="200" height="60" fill="#f1f5f9" stroke="#cbd5e1" rx="8"/>
+           <rect x="20" y="15" width="160" height="30" class="block-conv"/>
+           <text x="100" y="35" text-anchor="middle" class="param-text">Bottleneck (1024)</text>
+        </g>
+
+        <g transform="translate(440, 140)">
+           <rect x="0" y="0" width="180" height="300" fill="#f8fafc" stroke="#e2e8f0" rx="8"/>
+           <text x="90" y="20" text-anchor="middle" class="op-text">Decoder Stack</text>
+           <rect x="10" y="40" width="160" height="30" class="block-pool"/><text x="90" y="60" text-anchor="middle" class="param-text">UpConv (1024->512)</text>
+           <rect x="10" y="80" width="160" height="30" class="block-fc"/><text x="90" y="100" text-anchor="middle" class="param-text">Skip Concat</text>
+           <rect x="10" y="120" width="160" height="30" class="block-conv"/><text x="90" y="140" text-anchor="middle" class="param-text">Block4 (512)</text>
+           <text x="90" y="170" text-anchor="middle" class="param-text">... Repeat x3 ...</text>
+           <rect x="10" y="200" width="160" height="30" class="block-conv"/><text x="90" y="220" text-anchor="middle" class="param-text">Final (128->64)</text>
+        </g>
+        
+        <path d="M 220 300 L 440 240" class="line" stroke-dasharray="4" />
+        <path d="M 330 460 L 330 540" class="line" /> <g transform="translate(230, 600)">
+           <rect x="0" y="0" width="200" height="50" class="block-conv"/>
+           <text x="100" y="30" text-anchor="middle" class="op-text">Final Conv1x1</text>
+        </g>
+        
+        <text x="330" y="700" text-anchor="middle" class="tensor" font-size="14">Output: Mask (B, 1, 320, 320)</text>
+      </g>
+
+    </svg>
+  </div>
+</div>
+
+<script>
+  function downloadLLD(){
+    const svg = document.getElementById('lldSvg');
+    const serializer = new XMLSerializer();
+    let source = serializer.serializeToString(svg);
+    if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+      source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    const blob = new Blob([source], {type:'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'lld_grid_blueprint.svg';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+</script>
+</body>
+</html>

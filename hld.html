@@ -1,0 +1,362 @@
+<!-- <h3>Welcome to the real-time HTML editor!</h3>
+<p>Type HTML in the textarea above, and it will magically appear in the frame below.</p><!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Capstone HLD — Modular Architecture</title>
+  <style>
+    :root{--bg:#f8fafc;--card:#ffffff;--accent:#2563eb;--text:#334155;--border:#e2e8f0}
+    html,body{height:100%;margin:0;font-family:Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:1400px;margin:20px auto;padding:20px;background:white;border-radius:12px;box-shadow:0 10px 30px -10px rgba(0,0,0,0.1)}
+    .header{margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:15px}
+    .title{font-size:24px;font-weight:800;color:#0f172a}
+    .subtitle{color:#64748b;margin-top:4px}
+    .controls{margin-top:15px;display:flex;gap:10px}
+    button{padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;transition:all 0.2s}
+    button:hover{opacity:0.9;transform:translateY(-1px)}
+    button.sec{background:#cbd5e1;color:#334155}
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="header">
+    <div class="title">CT Tampering Detection — Modular System View</div>
+    <div class="subtitle">Hierarchical architecture with isolated model containers. Optimized for report readability.</div>
+    <div class="controls">
+      <button onclick="downloadSVG()">Download SVG (Vector)</button>
+      <button class="sec" onclick="downloadPNG()">Download PNG</button>
+    </div>
+  </div>
+
+  <div style="overflow:auto;border:1px solid #e2e8f0;border-radius:8px;">
+    <svg id="modularHld" viewBox="0 0 1600 1300" width="1600" height="1300" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc">
+      <defs>
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.08"/>
+        </filter>
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L9,3 z" fill="#64748b" />
+        </marker>
+        <style>
+          .container-box { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 12; filter: url(#shadow); }
+          .inner-box { fill: #f1f5f9; stroke: #e2e8f0; stroke-width: 1; rx: 6; }
+          .highlight-box { fill: #e0f2fe; stroke: #7dd3fc; stroke-width: 1; rx: 6; }
+          .label-main { font-family: sans-serif; font-weight: bold; font-size: 16px; fill: #0f172a; }
+          .label-sub { font-family: sans-serif; font-size: 12px; fill: #475569; }
+          .label-detail { font-family: monospace; font-size: 11px; fill: #64748b; }
+          .connector { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+          .badge { fill: #2563eb; rx: 4; }
+          .badge-text { fill: white; font-weight: bold; font-size: 12px; }
+        </style>
+      </defs>
+
+      <g transform="translate(600, 40)">
+        <rect width="400" height="140" class="container-box" style="stroke:#94a3b8" />
+        <rect x="0" y="0" width="400" height="36" rx="12" style="fill:#e2e8f0" /> <text x="200" y="24" text-anchor="middle" class="label-main">Phase 1: Input & Global Preprocessing</text>
+        
+        <rect x="20" y="50" width="100" height="70" class="highlight-box" />
+        <text x="70" y="80" text-anchor="middle" class="label-sub" font-weight="bold">DICOM/NIfTI</text>
+        <text x="70" y="100" text-anchor="middle" class="label-detail">HU Norm.</text>
+
+        <rect x="150" y="50" width="220" height="70" class="inner-box" />
+        <text x="260" y="75" text-anchor="middle" class="label-sub" font-weight="bold">Adaptive Preprocessing</text>
+        <text x="260" y="95" text-anchor="middle" class="label-detail">Windowing • CLAHE • ROI Crop</text>
+        <text x="260" y="110" text-anchor="middle" class="label-detail">Freq Transforms (FFT/Wavelet)</text>
+
+        <line x1="120" y1="85" x2="150" y2="85" class="connector" />
+      </g>
+
+      <line x1="800" y1="180" x2="800" y2="230" class="connector" />
+
+      <g transform="translate(500, 230)">
+        <rect width="600" height="240" class="container-box" />
+        <rect x="20" y="-12" width="80" height="24" class="badge" />
+        <text x="60" y="5" text-anchor="middle" class="badge-text">Model 1</text>
+        
+        <text x="300" y="30" text-anchor="middle" class="label-main">Tampering Detection (Binary Classifier)</text>
+        <text x="300" y="50" text-anchor="middle" class="label-sub">Architecture: Dual-Stream Late Fusion</text>
+
+        <g transform="translate(40, 70)">
+            <rect width="180" height="100" class="inner-box" style="fill:#eff6ff; stroke:#bfdbfe" />
+            <text x="90" y="25" text-anchor="middle" class="label-sub" font-weight="bold" fill="#1e40af">Spatial Stream</text>
+            <text x="90" y="50" text-anchor="middle" class="label-detail">EfficientNet-B3</text>
+            <text x="90" y="70" text-anchor="middle" class="label-detail">MBConv Layers</text>
+            <text x="90" y="90" text-anchor="middle" class="label-detail">1536-d Vector</text>
+        </g>
+
+        <g transform="translate(380, 70)">
+            <rect width="180" height="100" class="inner-box" style="fill:#f0fdf4; stroke:#bbf7d0" />
+            <text x="90" y="25" text-anchor="middle" class="label-sub" font-weight="bold" fill="#166534">Frequency Stream</text>
+            <text x="90" y="50" text-anchor="middle" class="label-detail">Custom MLP</text>
+            <text x="90" y="70" text-anchor="middle" class="label-detail">SRM / FFT Features</text>
+            <text x="90" y="90" text-anchor="middle" class="label-detail">128-d Vector</text>
+        </g>
+
+        <g transform="translate(180, 190)">
+            <rect width="240" height="30" class="highlight-box" />
+            <text x="120" y="20" text-anchor="middle" class="label-detail" font-weight="bold">Concatenate → FC Layers → Sigmoid</text>
+        </g>
+        
+        <line x1="130" y1="170" x2="220" y2="190" stroke="#94a3b8" stroke-width="1" />
+        <line x1="470" y1="170" x2="380" y2="190" stroke="#94a3b8" stroke-width="1" />
+      </g>
+
+      <line x1="800" y1="470" x2="800" y2="520" class="connector" />
+
+      <g transform="translate(500, 520)">
+        <rect width="600" height="240" class="container-box" />
+        <rect x="20" y="-12" width="80" height="24" class="badge" style="fill:#059669" />
+        <text x="60" y="5" text-anchor="middle" class="badge-text">Model 2</text>
+
+        <text x="300" y="30" text-anchor="middle" class="label-main">Tampering Sub-type Classification</text>
+        <text x="300" y="50" text-anchor="middle" class="label-sub">Architecture: Ensemble (EffNet + DenseNet)</text>
+
+        <g transform="translate(40, 70)">
+            <rect width="200" height="100" class="inner-box" />
+            <text x="100" y="30" text-anchor="middle" class="label-sub" font-weight="bold">EfficientNet-B2</text>
+            <text x="100" y="55" text-anchor="middle" class="label-detail">Channel Attention Module</text>
+            <text x="100" y="80" text-anchor="middle" class="label-detail">Output: 1408-d</text>
+        </g>
+
+        <g transform="translate(360, 70)">
+            <rect width="200" height="100" class="inner-box" />
+            <text x="100" y="30" text-anchor="middle" class="label-sub" font-weight="bold">DenseNet-121</text>
+            <text x="100" y="55" text-anchor="middle" class="label-detail">Dense Blocks & Trans.</text>
+            <text x="100" y="80" text-anchor="middle" class="label-detail">Output: 1024-d</text>
+        </g>
+
+        <g transform="translate(150, 190)">
+            <rect width="300" height="30" class="highlight-box" />
+            <text x="150" y="20" text-anchor="middle" class="label-detail" font-weight="bold">Ensemble Fusion → Softmax (Inj vs Rem)</text>
+        </g>
+        
+        <line x1="140" y1="170" x2="200" y2="190" stroke="#94a3b8" stroke-width="1" />
+        <line x1="460" y1="170" x2="400" y2="190" stroke="#94a3b8" stroke-width="1" />
+      </g>
+
+      <path d="M 800 760 L 800 800 L 400 800 L 400 840" class="connector" /> <path d="M 800 760 L 800 800 L 1200 800 L 1200 840" class="connector" /> <g transform="translate(100, 840)">
+        <rect width="600" height="280" class="container-box" />
+        <rect x="20" y="-12" width="80" height="24" class="badge" style="fill:#7c3aed" />
+        <text x="60" y="5" text-anchor="middle" class="badge-text">Model 3</text>
+        
+        <text x="300" y="30" text-anchor="middle" class="label-main">Injection Localization</text>
+        <text x="300" y="50" text-anchor="middle" class="label-sub">Architecture: UNet++ with ResNet-34 Encoder</text>
+
+        <rect x="50" y="80" width="500" height="40" class="inner-box" />
+        <text x="300" y="105" text-anchor="middle" class="label-detail">Encoder: ResNet-34 (Pre-trained) with SCSE Blocks</text>
+
+        <rect x="50" y="140" width="500" height="40" class="inner-box" />
+        <text x="300" y="165" text-anchor="middle" class="label-detail">Decoder: Nested Skip Pathways (Dense Aggregation)</text>
+
+        <rect x="150" y="200" width="300" height="50" class="highlight-box" style="stroke:#c4b5fd; fill:#f5f3ff" />
+        <text x="250" y="220" text-anchor="middle" class="label-sub" font-weight="bold">Enhancement Head</text>
+        <text x="250" y="240" text-anchor="middle" class="label-detail">CBAM Attention + Soft-KNN</text>
+      </g>
+
+      <g transform="translate(900, 840)">
+        <rect width="600" height="280" class="container-box" />
+        <rect x="20" y="-12" width="80" height="24" class="badge" style="fill:#db2777" />
+        <text x="60" y="5" text-anchor="middle" class="badge-text">Model 4</text>
+
+        <text x="300" y="30" text-anchor="middle" class="label-main">Removal Localization</text>
+        <text x="300" y="50" text-anchor="middle" class="label-sub">Architecture: Multi-Channel Standard UNet</text>
+
+        <rect x="50" y="80" width="500" height="40" class="inner-box" />
+        <text x="300" y="105" text-anchor="middle" class="label-detail">Encoder: 4-Block CNN (Conv-BN-ReLU)</text>
+
+        <rect x="200" y="140" width="200" height="30" class="inner-box" />
+        <text x="300" y="160" text-anchor="middle" class="label-detail">Bottleneck (1024-d)</text>
+
+        <rect x="50" y="190" width="500" height="40" class="inner-box" />
+        <text x="300" y="215" text-anchor="middle" class="label-detail">Decoder: Transpose Conv + Skip Connections</text>
+
+        <rect x="200" y="240" width="200" height="25" class="highlight-box" style="stroke:#fbcfe8; fill:#fdf2f8" />
+        <text x="300" y="257" text-anchor="middle" class="label-detail" font-weight="bold">Output: Binary Mask</text>
+      </g>
+
+      <g transform="translate(500, 1180)">
+        <rect width="600" height="80" class="container-box" style="stroke:#10b981; stroke-width:3" />
+        <text x="300" y="35" text-anchor="middle" class="label-main">Final Aggregation & Report</text>
+        <text x="300" y="60" text-anchor="middle" class="label-sub">Classification + Mask Overlay + Confidence Score (JSON)</text>
+      </g>
+
+      <line x1="400" y1="1120" x2="500" y2="1180" class="connector" />
+      <line x1="1200" y1="1120" x2="1100" y2="1180" class="connector" />
+
+    </svg>
+  </div>
+</div>
+
+<script>
+  function downloadSVG(){
+    const svg = document.getElementById('modularHld');
+    const serializer = new XMLSerializer();
+    let source = serializer.serializeToString(svg);
+    if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+      source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    const blob = new Blob([source], {type:'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'capstone_modular_hld.svg';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function downloadPNG(){
+    const svg = document.getElementById('modularHld');
+    const serializer = new XMLSerializer();
+    let source = serializer.serializeToString(svg);
+    if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+      source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    const image = new Image();
+    const blob = new Blob([source], {type:'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    image.onload = function(){
+        const canvas = document.createElement('canvas');
+        canvas.width = svg.clientWidth;
+        canvas.height = svg.clientHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#f8fafc'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.drawImage(image, 0, 0);
+        const png = canvas.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = png;
+        a.download = 'capstone_modular_hld.png';
+        document.body.appendChild(a);
+        a.click();
+    };
+    image.src = url;
+  }
+</script>
+</body>
+</html> -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{--bg:#ffffff;--line:#94a3b8;--success:#10b981;--warning:#f59e0b;--danger:#ef4444;--primary:#3b82f6}
+    .diagram-wrap{font-family:Inter,sans-serif;max-width:1000px;margin:20px auto;border:1px solid #e2e8f0;border-radius:8px;padding:20px;background:#f8fafc}
+    .btn-dl{background:#3b82f6;color:white;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;margin-bottom:10px}
+  </style>
+</head>
+<body>
+<div class="diagram-wrap">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <h3 style="margin:0;color:#0f172a">Inference Control Logic & Fail-Safe Data Flow</h3>
+    <button class="btn-dl" onclick="downloadLogicSVG()">Download SVG</button>
+  </div>
+
+  <svg id="logicSvg" viewBox="0 0 900 650" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowHead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L9,3 z" fill="#64748b" />
+      </marker>
+      <style>
+        .box { fill: white; stroke: #cbd5e1; stroke-width: 2; rx: 6; }
+        .decision { fill: #fffbeb; stroke: #f59e0b; stroke-width: 2; rx: 20; } /* Diamond shape simulated */
+        .process { fill: #eff6ff; stroke: #3b82f6; stroke-width: 2; rx: 6; }
+        .terminator { fill: #f0fdf4; stroke: #10b981; stroke-width: 2; rx: 15; }
+        .alert { fill: #fef2f2; stroke: #ef4444; stroke-width: 2; rx: 6; }
+        .txt { font-size: 12px; fill: #334155; font-family: sans-serif; text-anchor: middle; }
+        .txt-bold { font-weight: bold; }
+        .path { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#arrowHead); }
+        .label { font-size: 10px; fill: #64748b; background: white; }
+      </style>
+    </defs>
+
+    <rect x="350" y="10" width="200" height="40" class="box" />
+    <text x="450" y="35" class="txt txt-bold">New Scan Inference</text>
+
+    <rect x="350" y="80" width="200" height="50" class="process" />
+    <text x="450" y="100" class="txt txt-bold">Model 1 (Detection)</text>
+    <text x="450" y="118" class="txt" font-size="10">Dual-Stream Fusion</text>
+
+    <rect x="350" y="160" width="200" height="50" class="decision" />
+    <text x="450" y="180" class="txt txt-bold">Check Confidence</text>
+    <text x="450" y="198" class="txt" font-size="10">Threshold > 0.6?</text>
+
+    <rect x="100" y="160" width="160" height="50" class="alert" />
+    <text x="180" y="180" class="txt txt-bold">Flag: Low Confidence</text>
+    <text x="180" y="198" class="txt" font-size="10">Route to Manual Review</text>
+
+    <rect x="350" y="240" width="200" height="50" class="process" />
+    <text x="450" y="260" class="txt txt-bold">Model 2 (Sub-Type)</text>
+    <text x="450" y="278" class="txt" font-size="10">Injection vs Removal</text>
+
+    <rect x="350" y="320" width="200" height="50" class="decision" />
+    <text x="450" y="340" class="txt txt-bold">Check Ambiguity</text>
+    <text x="450" y="358" class="txt" font-size="10">Max Prob > 0.55?</text>
+
+    <rect x="100" y="320" width="160" height="50" class="alert" />
+    <text x="180" y="340" class="txt txt-bold">Flag: Uncertain Type</text>
+    <text x="180" y="358" class="txt" font-size="10">Needs Expert Verification</text>
+
+    <rect x="220" y="420" width="200" height="60" class="process" />
+    <text x="320" y="440" class="txt txt-bold">Model 3 (Injection)</text>
+    <text x="320" y="458" class="txt" font-size="10">UNet++ & CBAM</text>
+    <text x="320" y="472" class="txt" font-size="10" fill="#3b82f6">+ Soft-KNN Refinement</text>
+
+    <rect x="480" y="420" width="200" height="60" class="process" />
+    <text x="580" y="440" class="txt txt-bold">Model 4 (Removal)</text>
+    <text x="580" y="458" class="txt" font-size="10">Standard Multi-Ch UNet</text>
+    <text x="580" y="472" class="txt" font-size="10" fill="#3b82f6">+ Area Threshold Check</text>
+
+    <rect x="350" y="520" width="200" height="40" class="box" />
+    <text x="450" y="545" class="txt">Post-Processing (CRF / Morph)</text>
+
+    <rect x="350" y="590" width="200" height="40" class="terminator" />
+    <text x="450" y="615" class="txt txt-bold">Final Report JSON</text>
+
+    <path d="M 450 50 L 450 80" class="path" />
+    <path d="M 450 130 L 450 160" class="path" />
+    
+    <path d="M 350 185 L 260 185" class="path" />
+    <text x="305" y="180" class="label">No</text>
+    
+    <path d="M 450 210 L 450 240" class="path" />
+    <text x="460" y="225" class="label">Yes</text>
+
+    <path d="M 450 290 L 450 320" class="path" />
+
+    <path d="M 350 345 L 260 345" class="path" />
+    <text x="305" y="340" class="label">No</text>
+
+    <path d="M 450 370 L 450 390 L 320 390 L 320 420" class="path" /> <text x="360" y="405" class="label">Type: Inj</text>
+    
+    <path d="M 450 370 L 450 390 L 580 390 L 580 420" class="path" /> <text x="530" y="405" class="label">Type: Rem</text>
+
+    <path d="M 320 480 L 320 500 L 450 500 L 450 520" class="path" />
+    <path d="M 580 480 L 580 500 L 450 500 L 450 520" class="path" />
+
+    <path d="M 450 560 L 450 590" class="path" />
+  </svg>
+</div>
+
+<script>
+function downloadLogicSVG(){
+  const svg = document.getElementById('logicSvg');
+  const serializer = new XMLSerializer();
+  let source = serializer.serializeToString(svg);
+  if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+    source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
+  const blob = new Blob([source], {type:'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'inference_logic_flow.svg';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+</script>
+</body>
+</html>

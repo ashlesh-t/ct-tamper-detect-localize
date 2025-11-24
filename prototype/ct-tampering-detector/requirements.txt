@@ -1,0 +1,13 @@
+streamlit==1.38.0
+numpy
+opencv-python
+matplotlib
+plotly
+pydicom
+nibabel
+SimpleITK
+pillow
+scikit-image
+streamlit-player
+streamlit-option-menu
+streamlit-drawable-canvas
