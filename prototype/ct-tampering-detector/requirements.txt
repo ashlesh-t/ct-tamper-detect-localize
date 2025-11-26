@@ -11,4 +11,8 @@ scikit-image
 streamlit-player
 streamlit-option-menu
 streamlit-drawable-canvas
+torch
+pandas
+segmentation_models_pytorch
+albumentations
 scikit-learn

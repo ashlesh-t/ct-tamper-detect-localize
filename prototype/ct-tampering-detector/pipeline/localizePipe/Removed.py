@@ -44,15 +44,11 @@ class Removed:
         """Load the pre-trained MultiChannelUNet for removal localization."""
         # Try to load best dice model first, then best loss model
         dice_path = Path(config.REMOVAL_BEST_DICE_MODEL)
-        loss_path = Path(config.REMOVAL_BEST_LOSS_MODEL)
         
         model_path = None
         if dice_path.exists():
             model_path = dice_path
             logger.info("Loading removal localization model: best_dice_model.pth")
-        elif loss_path.exists():
-            model_path = loss_path
-            logger.info("Loading removal localization model: best_loss_model.pth")
         else:
             raise FileNotFoundError(
                 f"No removal localization model found at {config.REMOVAL_LOCALIZATION_DIR}"
