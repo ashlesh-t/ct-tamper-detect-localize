@@ -30,6 +30,10 @@ st.markdown(load_css(), unsafe_allow_html=True)
 
 # === 5. MAIN ROUTER LOGIC ===
 
+# app.py - Add this section after the main router logic
+# Replace the entire app.py router section with this:
+
+# === 5. MAIN ROUTER LOGIC ===
 if st.session_state.current_page == 'home':
     # --- HOME PAGE (Intro + Upload + Viewer) ---
     
@@ -39,28 +43,20 @@ if st.session_state.current_page == 'home':
     uploaded_files = upload_section()
 
     # Logic: Load volume ONLY if files are uploaded AND we haven't loaded them yet
-    # OR if the user uploaded a new set of files.
     if uploaded_files:
-        # We use a simple check: if vol_data is None, we load.
-        # (For production, you might want to check if filenames changed to force reload)
         if st.session_state.vol_data is None:
-            with st.spinner("Loading volume... This may take a few seconds"):
+            with st.spinner("🧠 Loading volume... This may take a few seconds"):
                 volume = load_medical_image(uploaded_files)
-                st.session_state.vol_data = volume # Persist in state
-                st.rerun() # Rerun to refresh UI with loaded volume
+                st.session_state.vol_data = volume
+                st.rerun()
 
     # Show Viewer if data exists
     if st.session_state.vol_data is not None:
-        # Optional: Add a "Clear" button to reset
-        if st.sidebar.button("Clear / Upload New"):
-            st.session_state.vol_data = None
-            st.rerun()
-            
-        st.success(f"Ready for forensic analysis! Volume Shape: {st.session_state.vol_data.shape}")
+        st.success(f"✅ Volume loaded! Shape: {st.session_state.vol_data.shape}")
         show_viewer(st.session_state.vol_data)
 
     elif not uploaded_files:
-        st.info("Upload a volume or folder of slices to begin...")
+        st.info("📤 Upload a volume or folder of slices to begin forensic analysis...")
 
 
 elif st.session_state.current_page == 'results':

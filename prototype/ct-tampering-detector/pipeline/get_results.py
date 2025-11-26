@@ -13,6 +13,7 @@ from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 import numpy as np
 
+from config.configs import ModelConfig
 from pipeline.classifiers import TamperClassifiers
 from pipeline.localize import Localize
 from pipeline.preProces.preProcess import preprocess
@@ -56,6 +57,7 @@ class TamperPipeline:
         self.types = Types()
         self.classifier: Optional[TamperClassifiers] = None
         self.localizer: Optional[Localize] = None
+        self.config = ModelConfig() 
 
     def _classify(self, files: List[Dict], num_files: int, classifier_type: int) -> ClassificationResult:
         """

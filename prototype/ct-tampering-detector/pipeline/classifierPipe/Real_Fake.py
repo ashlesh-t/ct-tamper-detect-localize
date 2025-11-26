@@ -6,10 +6,10 @@ from typing import List, Dict, Any, Tuple
 import logging
 from torch.utils.data import DataLoader
 import os
-import json
 
 from pipeline.architectures.architecture import MultiStreamCTModel
 from pipeline.data_loaders.inference_dataset import MultiChannelCTDataset, EvalTransforms
+from pipeline.config.configs import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -17,71 +17,65 @@ class RealFake:
     def __init__(self, data: List[Dict[str, Any]], length: int):
         self.data = data
         self.length = length
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.config = ModelConfig()
+        self.device = torch.device(self.config.DEVICE)
         self.model = None
-        self.config = self._load_config()
+        self.last_slice_details = None
+        self.last_volume_stats = None
         
-    def _load_config(self) -> Dict[str, Any]:
-        """Load model configuration"""
-        return {
-            'img_size': 384,
-            'batch_size': 16,
-            'num_classes': 2,
-            'model_checkpoint': self._find_model_checkpoint(),
-            'device': self.device
-        }
-    
-    def _find_model_checkpoint(self) -> str:
-        """Find the appropriate model checkpoint"""
-        # You can modify this path based on your model location
-        possible_paths = [
-            "models/binary_ct_ultimate_v6.0_finetune/ultimate_best_model.pth",
-            "capstone_models/binary_ct_ultimate_v6.0_finetune/ultimate_best_model.pth",
-            "/content/drive/MyDrive/capstone_models/binary_ct_ultimate_v6.0_finetune/ultimate_best_model.pth"
-        ]
-        
-        for path in possible_paths:
-            if os.path.exists(path):
-                logger.info(f"Found model checkpoint at: {path}")
-                return path
-        
-        raise FileNotFoundError("Could not find model checkpoint. Please update the path in Real_Fake.py")
-    
     def load_model(self):
-        """Load the trained model"""
+        """Load the trained model with proper weight handling"""
         try:
-            self.model = MultiStreamCTModel(num_classes=self.config['num_classes']).to(self.config['device'])
+            self.model = MultiStreamCTModel(
+                pretrained=False,  # We're loading our own weights
+                feature_dim=self.config.FEATURE_DIM,
+                num_classes=self.config.NUM_CLASSES
+            ).to(self.device)
             
-            checkpoint = torch.load(self.config['model_checkpoint'], 
-                                  map_location=self.config['device'],
-                                  weights_only=False)
+            # Check if model file exists
+            if not os.path.exists(self.config.REAL_FAKE_MODEL_PATH):
+                raise FileNotFoundError(
+                    f"Model checkpoint not found at: {self.config.REAL_FAKE_MODEL_PATH}\n"
+                    f"Please update REAL_FAKE_MODEL_PATH in config.py"
+                )
             
-            # Handle different checkpoint formats
-            if 'model_state_dict' in checkpoint:
+            checkpoint = torch.load(
+                self.config.REAL_FAKE_MODEL_PATH, 
+                map_location=self.device,
+                weights_only=False
+            )
+            
+            # Handle different checkpoint formats from your training script
+            if 'model_state' in checkpoint:
+                state_dict = checkpoint['model_state']
+            elif 'model_state_dict' in checkpoint:
                 state_dict = checkpoint['model_state_dict']
-                logger.info(f"Loaded checkpoint from epoch {checkpoint.get('epoch', 'unknown')}")
             else:
                 state_dict = checkpoint
-            
-            self.model.load_state_dict(state_dict)
+                
+            # Load state dict with strict=False to handle auxiliary classifiers
+            self.model.load_state_dict(state_dict, strict=False)
             self.model.eval()
-            logger.info("Model loaded successfully")
             
+            logger.info(f"Model loaded successfully from {self.config.REAL_FAKE_MODEL_PATH}")
+            if 'best_f1' in checkpoint:
+                logger.info(f"Model was trained with best F1: {checkpoint['best_f1']:.4f}")
+                
         except Exception as e:
             logger.error(f"Error loading model: {e}")
             raise
     
     def create_dataloader(self) -> DataLoader:
-        """Create dataloader for inference"""
+        """Create dataloader for inference with proper transforms"""
         dataset = MultiChannelCTDataset(
             slice_data=self.data,
-            transform=EvalTransforms(img_size=self.config['img_size']),
-            img_size=self.config['img_size']
+            transform=EvalTransforms(img_size=self.config.IMG_SIZE),
+            img_size=self.config.IMG_SIZE
         )
         
         return DataLoader(
             dataset,
-            batch_size=self.config['batch_size'],
+            batch_size=self.config.BATCH_SIZE,
             shuffle=False,
             num_workers=2,
             pin_memory=True
@@ -100,10 +94,14 @@ class RealFake:
         
         with torch.no_grad():
             for batch in dataloader:
-                images = batch['images'].to(self.config['device'])
+                images = batch['images'].to(self.device, non_blocking=True).float()
                 fnames = batch['fnames']
                 
-                outputs = self.model(images)
+                # Use autocast for consistent behavior with training
+                with torch.amp.autocast(device_type='cuda' if self.device.type == 'cuda' else 'cpu'):
+                    outputs, _ = self.model(images)
+                    outputs = outputs.float()  # Ensure float32 for consistency
+                
                 probs = torch.softmax(outputs, dim=1)
                 probs_fake = probs[:, 1].cpu().numpy()  # Probability of class 1 (Fake)
                 predictions = torch.argmax(outputs, dim=1).cpu().numpy()
@@ -124,7 +122,7 @@ class RealFake:
         volume_confidence_fake = np.mean(probs_fake)
         volume_confidence_real = 1 - volume_confidence_fake
         
-        # Determine volume classification
+        # Determine volume classification (using 0.5 threshold as in training)
         if volume_confidence_fake > 0.5:
             volume_classification = "Fake"
             volume_confidence = volume_confidence_fake
@@ -144,34 +142,44 @@ class RealFake:
             'slices_predicted_real': sum(1 for p in predictions if p == 0),
             'slices_predicted_fake': sum(1 for p in predictions if p == 1),
             'mean_fake_confidence': float(np.mean(probs_fake)),
-            'std_fake_confidence': float(np.std(probs_fake))
+            'std_fake_confidence': float(np.std(probs_fake)),
+            'min_fake_confidence': float(np.min(probs_fake)),
+            'max_fake_confidence': float(np.max(probs_fake))
         }
+        
+        # Store slice details for detailed reporting
+        slice_details = [
+            {
+                'filename': filenames[i],
+                'prediction': 'Fake' if predictions[i] == 1 else 'Real',
+                'fake_confidence': float(probs_fake[i]),
+                'prediction_binary': int(predictions[i])
+            }
+            for i in range(len(filenames))
+        ]
         
         return {
             'volume_classification': volume_classification,
             'volume_confidence': float(volume_confidence),
             'affected_slices': affected_slices,
             'slice_statistics': slice_stats,
-            'slice_details': [
-                {
-                    'filename': filenames[i],
-                    'prediction': 'Fake' if predictions[i] == 1 else 'Real',
-                    'fake_confidence': float(probs_fake[i])
-                }
-                for i in range(len(filenames))
-            ]
+            'slice_details': slice_details
         }
     
     def get_results(self) -> Tuple[int, Any, List[str], Exception]:
         """Main method to get classification results"""
         try:
-            logger.info("Starting Real-Fake classification")
+            logger.info("Starting Real-Fake classification with MultiStreamCTModel")
             
             # Run inference
             filenames, probs_fake, predictions = self.run_inference()
             
             # Aggregate results
             results = self.aggregate_volume_prediction(filenames, probs_fake, predictions)
+            
+            # Store for detailed reporting
+            self.last_slice_details = results['slice_details']
+            self.last_volume_stats = results['slice_statistics']
             
             # Format return values to match your existing pipeline
             status = 200
@@ -181,8 +189,11 @@ class RealFake:
             )
             affected_filenames = results['affected_slices']
             
-            logger.info(f"Classification complete: {results['volume_classification']} "
-                       f"(confidence: {results['volume_confidence']:.3f})")
+            logger.info(
+                f"Classification complete: {results['volume_classification']} "
+                f"(confidence: {results['volume_confidence']:.3f}, "
+                f"affected slices: {len(affected_filenames)}/{len(filenames)})"
+            )
             
             return status, classification_result, affected_filenames, None
             

@@ -310,23 +310,52 @@ def show_viewer(volume: np.ndarray):
                     status.update(label="Analysis Complete!", state="complete", expanded=False)
                 
                 # 3. HANDLE RESPONSES (Same as before)
+                # In viewer.py, inside the analyze_volume try block, after getting results:
                 if status_code == 200:
-                    st.success("Tampering Localized. Generating Report...")
-                    time.sleep(0.5)
+                    st.success("🎯 Analysis Complete! Tampering Detected")
+                    
+                    # Add View Report button
+                    if st.button("📋 View Detailed Report", type="primary", use_container_width=True):
+                        st.session_state['analysis_results'] = result_data
+                        st.session_state['current_page'] = 'results'
+                        st.rerun()
+                    
+                    # Also keep the auto-redirect for immediate viewing
+                    time.sleep(1)
                     st.session_state['analysis_results'] = result_data
                     st.session_state['current_page'] = 'results'
                     st.rerun()
 
                 elif status_code == 206:
                     cls = result_data.get('classification', 'Unknown')
-                    if cls == "Fake":
+                    if cls == "Fake" or cls == "Tampered":
                         trigger_glow("red")
-                        st.error(f"⚠️ DETECTED: FAKE")
-                        st.warning("Localization failed: Unable to pinpoint region.")
+                        st.error("🚨 TAMPERING DETECTED!")
+                        
+                        # Add View Report button for partial results too
+                        if st.button("📋 View Detection Report", type="primary", use_container_width=True):
+                            st.session_state['analysis_results'] = result_data
+                            st.session_state['current_page'] = 'results'
+                            st.rerun()
                     else:
                         trigger_glow("green")
-                        st.success(f"✅ VERIFIED: REAL")
-                        st.info("Authenticity verified. Localization skipped.")
+                        st.success("✅ AUTHENTIC SCAN VERIFIED")
+                        
+                        # Option to view verification report
+                        if st.button("📋 View Verification Report", type="secondary", use_container_width=True):
+                            st.session_state['analysis_results'] = result_data
+                            st.session_state['current_page'] = 'results'
+                            st.rerun()
+                # elif status_code == 206:
+                #     cls = result_data.get('classification', 'Unknown')
+                #     if cls == "Fake":
+                #         trigger_glow("red")
+                #         st.error(f"⚠️ DETECTED: FAKE")
+                #         st.warning("Localization failed: Unable to pinpoint region.")
+                #     else:
+                #         trigger_glow("green")
+                #         st.success(f"✅ VERIFIED: REAL")
+                #         st.info("Authenticity verified. Localization skipped.")
                         
                 else:
                     st.error(f"❌ Pipeline Error: {result_data.get('error')}")

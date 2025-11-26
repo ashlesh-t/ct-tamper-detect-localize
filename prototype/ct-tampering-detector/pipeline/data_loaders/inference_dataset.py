@@ -4,19 +4,19 @@
 Custom Dataset for batched inference on CT slices.
 """
 
-import torch
-from torch.utils.data import Dataset
-from typing import List, Dict, Any, Tuple, Callable
-import numpy as np
-import torch
-from torch.utils.data import Dataset
-import numpy as np
-from typing import List, Dict, Any, Callable
 import logging
+from typing import List, Dict, Any, Callable, Optional
+
+import numpy as np
+import torch
+from PIL import Image
+from torch.utils.data import Dataset
+from torchvision import transforms
 
 logger = logging.getLogger(__name__)
 
 class InferenceDataset(Dataset):
+    """Simple dataset for single-channel CT slice inference."""
     def __init__(self, slice_data: List[Dict[str, Any]], preprocess_fn: Callable[[np.ndarray], torch.Tensor]):
         """
         Args:
@@ -41,62 +41,121 @@ class InferenceDataset(Dataset):
             "raw": raw  # Optional: keep for post-processing if needed
         }
 
+class StackedChannelsToRGB:
+    """Utility to convert multi-channel numpy arrays into a RGB PIL.Image."""
+    def __call__(self, arr: np.ndarray) -> Image.Image:
+        arr = arr.astype(np.float32)
+        if arr.ndim != 3 or arr.shape[2] not in (1, 3):
+            raise ValueError("Input must be HxWx1 or HxWx3")
+        # Normalize per channel to [0,1] then scale to 0-255
+        rgb = np.zeros((arr.shape[0], arr.shape[1], 3), dtype=np.uint8)
+        if arr.shape[2] == 3:
+            for c in range(3):
+                ch = arr[:, :, c]
+                ch = (ch - ch.min()) / (ch.max() - ch.min() + 1e-6)
+                rgb[:, :, c] = (ch * 255).astype(np.uint8)
+        else:
+            ch = arr[:, :, 0]
+            ch = (ch - ch.min()) / (ch.max() - ch.min() + 1e-6)
+            single = (ch * 255).astype(np.uint8)
+            rgb = np.stack([single] * 3, axis=-1)
+        return Image.fromarray(rgb)
+
 class MultiChannelCTDataset(Dataset):
-    def __init__(self, 
-                 slice_data: List[Dict[str, Any]], 
-                 transform: Callable = None,
+    """Dataset for multi-channel CT slices represented as dict-channels (CT, ROI, FFT)."""
+    def __init__(self,
+                 slice_data: List[Dict[str, Any]],
+                 transform: Optional[Callable] = None,
                  img_size: int = 384):
         """
         Args:
-            slice_data: List of {"fname": str, "channels": dict with CT, ROI, FFT}
-            transform: Optional torchvision transform
-            img_size: Target image size
+            slice_data: List of {"fname": str, "channels": dict with 'CT','ROI','FFT'}
+            transform: Optional callable/transform. If None, returns tensor of shape (3, H, W).
+            img_size: Target image size recorded as original shape fallback.
         """
         self.slice_data = slice_data
         self.transform = transform
         self.img_size = img_size
-        
+        self.to_rgb = StackedChannelsToRGB()
+
     def __len__(self) -> int:
         return len(self.slice_data)
-    
+
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         item = self.slice_data[idx]
         channels = item["channels"]
         fname = item["fname"]
-        
-        # Stack channels in correct order: [CT, ROI, FFT]
+
+        # Stack channels in order: [CT, ROI, FFT] -> (H, W, 3)
         multi_channel = np.stack([
             channels['CT'],
-            channels['ROI'], 
+            channels['ROI'],
             channels['FFT']
-        ], axis=-1)  # Shape: (H, W, 3)
-        
-        # Convert to tensor and normalize
-        if self.transform:
-            multi_channel = self.transform(multi_channel)
+        ], axis=-1)
+
+        # If the transform expects an RGB/PIL image, convert first
+        # If transform expects numpy array or tensor it can handle directly.
+        img_for_transform = multi_channel
+        if isinstance(self.transform, transforms.Compose) or callable(self.transform):
+            # Caller-provided transform will decide how to interpret the input.
+            # Common scenario: transform expects PIL image -> convert
+            try:
+                # If transform includes ToPILImage, it will handle numpy, else try converting to RGB
+                img_for_transform = self.to_rgb(multi_channel)
+            except Exception:
+                img_for_transform = multi_channel
+
+            transformed = self.transform(img_for_transform) if self.transform else None
         else:
-            # Default normalization
-            multi_channel = torch.from_numpy(multi_channel).permute(2, 0, 1).float()
-            multi_channel = (multi_channel - 0.5) / 0.5  # Normalize to [-1, 1]
-        
+            transformed = None
+
+        if transformed is None:
+            # Default fallback: convert numpy to tensor (C, H, W)
+            transformed = torch.from_numpy(multi_channel).permute(2, 0, 1).float()
+
         return {
-            "images": multi_channel,  # (3, H, W)
+            "images": transformed,  # (3, H, W)
             "fnames": fname,
             "orig_shapes": item.get("original_shape", (self.img_size, self.img_size))
         }
 
 class EvalTransforms:
-    """Evaluation transforms matching training preprocessing"""
-    def __init__(self, img_size=384):
+    """Evaluation transforms for 3-channel models (default 384x384)."""
+    def __init__(self, img_size=384, mean=None, std=None):
         self.img_size = img_size
-        
+        self.mean = mean or [0.5, 0.5, 0.5]
+        self.std = std or [0.5, 0.5, 0.5]
+
     def __call__(self, x_np: np.ndarray) -> torch.Tensor:
-        import torchvision.transforms as transforms
-        
         transform_chain = transforms.Compose([
-            transforms.ToTensor(),
+            transforms.ToPILImage(),
             transforms.Resize((self.img_size, self.img_size)),
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            transforms.ToTensor(),
+            transforms.Normalize(mean=self.mean, std=self.std)
         ])
-        
         return transform_chain(x_np)
+
+class InjRemEvalTransforms:
+    """Evaluation transforms for injected/removed model (288x288) with per-channel stats."""
+    def __init__(self, img_size=288, channel_stats=None):
+        self.img_size = img_size
+        self.channel_stats = channel_stats or {
+            0: {'mean': 0.5, 'std': 0.5},
+            1: {'mean': 0.5, 'std': 0.5},
+            2: {'mean': 0.5, 'std': 0.5}
+        }
+        self.to_rgb = StackedChannelsToRGB()
+        self.base_transform = transforms.Compose([
+            transforms.Resize((self.img_size, self.img_size)),
+            transforms.ToTensor()
+        ])
+
+    def __call__(self, x_np: np.ndarray) -> torch.Tensor:
+        rgb_img = self.to_rgb(x_np)
+        tensor_img = self.base_transform(rgb_img)
+        # Normalize per channel using stored stats
+        for c in range(3):
+            if c in self.channel_stats:
+                stats = self.channel_stats[c]
+                tensor_img[c] = (tensor_img[c] - stats['mean']) / (stats['std'] + 1e-6)
+        return tensor_img
