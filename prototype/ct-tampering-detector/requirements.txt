@@ -11,3 +11,4 @@ scikit-image
 streamlit-player
 streamlit-option-menu
 streamlit-drawable-canvas
+scikit-learn

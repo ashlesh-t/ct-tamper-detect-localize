@@ -122,7 +122,8 @@ def show_results():
     # Retrieve data from session state
     data = st.session_state.get('analysis_results', {})
     volume_data = st.session_state.get('vol_data', None)
-    
+    if volume_data is not None:
+        depth = volume_data.shape[0]
     if not data:
         st.error("No analysis data found. Please return to the viewer.")
         if st.button("⬅️ Back to Viewer"):
@@ -157,9 +158,6 @@ def show_results():
                    text-align: center; font-size: 2.5rem;">
             {classification.upper()}
         </h2>
-        <p style="text-align: center; color: #ccc; font-size: 1.2rem;">
-            Confidence: <strong>{confidence*100:.1f}%</strong>
-        </p>
     </div>
     """, unsafe_allow_html=True)
 

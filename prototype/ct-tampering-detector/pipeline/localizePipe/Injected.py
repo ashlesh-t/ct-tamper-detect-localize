@@ -217,7 +217,7 @@ class Injected:
         if not affected_fnames:
             logger.warning("No affected filenames provided for localization")
             return []
-
+        print(self.slice_data,"\n====+++===\n",affected_fnames)
         # Filter for affected slices
         affected_slices = [s for s in self.slice_data if s["fname"] in affected_fnames]
         logger.info(f"Processing {len(affected_slices)} slices for injection localization")
@@ -228,7 +228,7 @@ class Injected:
         for slice_data in tqdm(affected_slices, desc="Localizing injections"):
             try:
                 fname = slice_data["fname"]
-                raw_data = slice_data["channels"]["CT"]
+                raw_data = slice_data["data"]
                 original_shape = raw_data.shape
                 
                 # Preprocess

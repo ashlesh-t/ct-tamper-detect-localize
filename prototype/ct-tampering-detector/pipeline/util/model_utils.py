@@ -17,7 +17,7 @@ def get_transform(img_size: int):
 
 def load_model(checkpoint_path, model, device, strict=False):
     """Load model checkpoint with safe strict handling"""
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device,weights_only=False)
     
     # Pick correct key
     if 'model_state_dict' in checkpoint:
