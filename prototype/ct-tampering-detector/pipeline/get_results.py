@@ -119,7 +119,7 @@ class TamperPipeline:
         except Exception as e:
             logger.error(f"Classification failed for type {classifier_type}: {e}")
             return ClassificationResult(
-                status=500, 
+                status=500,
                 classification=None, 
                 confidence=0.0, 
                 affected_filenames=[], 
@@ -145,8 +145,6 @@ class TamperPipeline:
         try:
             self.localizer = Localize(files, num_files, affected_fnames, type=localizer_type)
             reports = self.localizer.get_results()
-            print("==========================================================================Localization reports:", reports)
-            
             if not isinstance(reports, list):
                 raise ValueError(f"Invalid localization reports: {reports}")
 
@@ -163,7 +161,7 @@ class TamperPipeline:
                 )
                 if result.filename:  # Only add non-empty results
                     localization_results.append(result)
-            print(localization_results)
+            # print("="*8,localization_results)
                     
             logger.info(f"Localization completed: {len(localization_results)} results for type {localizer_type}")
             return localization_results
@@ -233,22 +231,25 @@ class TamperPipeline:
                 removed_fnames = binary_result.affected_filenames
 
             # Perform localization
-            injected_localizations = self._localize(
-                preprocessed_files, len(preprocessed_files), injected_fnames, localizer_type=1
-            )
-            removed_localizations = self._localize(
-                files, len(files), removed_fnames, localizer_type=2
-            )
-
+            injected_localizations,removed_localizations = [] , []
+            if len(injected_fnames):
+                injected_localizations = self._localize(
+                    files, len(files), injected_fnames, localizer_type=1
+                )
+            if len(removed_fnames):
+                removed_localizations = self._localize(
+                    files, len(files), removed_fnames, localizer_type=2
+                )
+            print("HUII: ",binary_result.affected_filenames)
             # Build comprehensive result
             detailed_data = {
                 "total_slices": len(preprocessed_files),
-                "tampered_slices_count": len(binary_result.affected_filenames),
+                "tampered_slices_count": len(injected_fnames) + len(removed_fnames),
                 "binary_confidence": binary_result.confidence,
                 "sub_classification_confidence": sub_result.confidence,
                 "tamper_analysis": {
                     "injected": {
-                        "count": len(injected_localizations),
+                        "count": len(injected_fnames),
                         "localized_slices": [
                             {
                                 "filename": loc.filename,
@@ -260,7 +261,7 @@ class TamperPipeline:
                         ]
                     },
                     "removed": {
-                        "count": len(removed_localizations),
+                        "count": len(removed_fnames),
                         "localized_slices": [
                             {
                                 "filename": loc.filename,
@@ -275,7 +276,7 @@ class TamperPipeline:
                 "slice_statistics": binary_result.volume_statistics or {},
                 "detailed_slices": binary_result.slice_details or []
             }
-
+            print(detailed_data)
             return 200, {
                 "classification": "Tampered",
                 "sub_classification": sub_result.classification,
@@ -289,6 +290,8 @@ class TamperPipeline:
 
         except Exception as e:
             logger.error(f"Error in tampered case handling: {e}")
+            import traceback
+            traceback.print_exc()
             return 206, {
                 "classification": "Tampered",
                 "classification_confidence": binary_result.confidence,
@@ -329,7 +332,7 @@ class TamperPipeline:
         try:
             logger.info(f"Starting enhanced multi-channel analysis on {len(sorted_files_list)} slices")
             
-            # Validate input format
+            # Validate input forma
             for i, item in enumerate(sorted_files_list):
                 if not isinstance(item, dict) or 'fname' not in item or 'data' not in item:
                     return 400, {
@@ -453,34 +456,34 @@ def create_tamper_pipeline() -> TamperPipeline:
 
 
 # Example usage and testing
-if __name__ == "__main__":
-    # Example of how to use the enhanced pipeline
-    def example_usage():
-        pipeline = TamperPipeline()
+# if __name__ == "__main__":
+#     # Example of how to use the enhanced pipeline
+#     def example_usage():
+#         pipeline = TamperPipeline()
         
-        # Example input data (you would replace this with actual data)
-        example_slices = [
-            {
-                "fname": "slice_001.dcm",
-                "data": np.random.rand(512, 512).astype(np.float32)  # Example CT slice
-            },
-            {
-                "fname": "slice_002.dcm", 
-                "data": np.random.rand(512, 512).astype(np.float32)
-            }
-            # ... more slices
-        ]
+#         # Example input data (you would replace this with actual data)
+#         example_slices = [
+#             {
+#                 "fname": "slice_001.dcm",
+#                 "data": np.random.rand(512, 512).astype(np.float32)  # Example CT slice
+#             },
+#             {
+#                 "fname": "slice_002.dcm", 
+#                 "data": np.random.rand(512, 512).astype(np.float32)
+#             }
+#             # ... more slices
+#         ]
         
-        # Analyze volume
-        status, results = pipeline.analyze_volume(example_slices)
+#         # Analyze volume
+#         status, results = pipeline.analyze_volume(example_slices)
         
-        print(f"Status: {status}")
-        print("Results:")
-        print(results)
+#         print(f"Status: {status}")
+#         print("Results:")
+#         print(results)
         
-        # For detailed analysis
-        if status == 200 and results.get("classification") == "Tampered":
-            print("\nDetailed tamper analysis available in 'data' field")
+#         # For detailed analysis
+#         if status == 200 and results.get("classification") == "Tampered":
+#             print("\nDetailed tamper analysis available in 'data' field")
         
-    # Run example
-    example_usage()
+#     # Run example
+#     example_usage()

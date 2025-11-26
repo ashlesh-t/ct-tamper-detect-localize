@@ -15,3 +15,4 @@ torch
 pandas
 segmentation_models_pytorch
 albumentations
+scikit-learn
