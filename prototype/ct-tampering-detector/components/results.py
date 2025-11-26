@@ -129,7 +129,7 @@ def show_results():
             st.session_state['current_page'] = 'home'
             st.rerun()
         return
-
+    print("="*10, "DATA IN RESULTS", data, "\n", "="*10)
     classification = data.get('classification', 'Unknown')
     raw_conf = data.get('confidence', 0)
 
@@ -283,22 +283,39 @@ def show_results():
         
         # Create slice selector
         depth = volume_data.shape[0]
-        slice_files = [f"slice_{i:04d}.npy" for i in range(depth)]
         
         # Find slices with localization data
-        localized_indices = [i for i, fname in enumerate(slice_files) if fname in localization_data]
+        print("="*10, "localization_data: ", localization_data, "\n", "="*10)
+        localized_indices = {i: filename for i, filename in enumerate(localization_data)}
+        print(localization_data)
+        print(localized_indices)
         
         if localized_indices:
             st.info(f"🔍 Found {len(localized_indices)} slices with localized tampering")
             
             # Slice navigation
-            selected_index = st.select_slider(
-                "Navigate to slice:",
-                options=localized_indices,
-                format_func=lambda x: f"Slice {x} - {localization_data[slice_files[x]]['type'].title()}",
-                key="slice_navigator"
-            )
-            
+            # localized_indices => dict: {slice_idx: filename}
+
+            available_slice_indices = list(localized_indices.keys())
+
+            # UI selection
+            if len(available_slice_indices) > 1:
+                selected_index = st.select_slider(
+                    "Navigate to slice:",
+                    options=available_slice_indices,
+                    format_func=lambda x: f"Slice {x} - {localization_data[localized_indices[x]]['type'].title()}",
+                    key="slice_navigator"
+                )
+            else:
+                selected_index = available_slice_indices[0]
+                st.info("Only one slice available for this patient.")
+
+            # Retrieve filename + metadata
+            selected_filename = localized_indices[selected_index]
+            info = localization_data[selected_filename]
+
+            st.markdown(f"**Slice {selected_index} - {info['type'].title()}**")
+
             if selected_index is not None:
                 col_left, col_right = st.columns(2)
                 
@@ -314,14 +331,13 @@ def show_results():
                 
                 with col_right:
                     st.markdown("#### Tampering Localization")
-                    current_file = slice_files[selected_index]
+                    current_file = localized_indices[selected_index]
                     loc_info = localization_data.get(current_file, {})
                     
                     if loc_info.get('heatmap'):
                         overlay_img = create_heatmap_overlay(
                             volume_data[selected_index],
-                            loc_info['heatmap'],
-                            loc_info.get('coords')
+                            loc_info['heatmap']
                         )
                         st.image(overlay_img, use_column_width=True, 
                                 caption=f"Slice {selected_index} - {loc_info.get('type', 'Unknown').title()} Detection")

@@ -145,6 +145,7 @@ class TamperPipeline:
         try:
             self.localizer = Localize(files, num_files, affected_fnames, type=localizer_type)
             reports = self.localizer.get_results()
+            print("==========================================================================Localization reports:", reports)
             
             if not isinstance(reports, list):
                 raise ValueError(f"Invalid localization reports: {reports}")
@@ -189,7 +190,7 @@ class TamperPipeline:
             "message": "Volume classified as authentic with high confidence"
         }
 
-    def _handle_tampered_case(self, preprocessed_files: List[Dict], binary_result: ClassificationResult) -> Tuple[int, Dict[str, Any]]:
+    def _handle_tampered_case(self, preprocessed_files: List[Dict], binary_result: ClassificationResult, files: List[Dict]) -> Tuple[int, Dict[str, Any]]:
         """
         Handle the case where volume is classified as Tampered.
         
@@ -236,7 +237,7 @@ class TamperPipeline:
                 preprocessed_files, len(preprocessed_files), injected_fnames, localizer_type=1
             )
             removed_localizations = self._localize(
-                preprocessed_files, len(preprocessed_files), removed_fnames, localizer_type=2
+                files, len(files), removed_fnames, localizer_type=2
             )
 
             # Build comprehensive result
@@ -251,8 +252,9 @@ class TamperPipeline:
                         "localized_slices": [
                             {
                                 "filename": loc.filename,
-                                "bounding_boxes": loc.coords,
-                                "heatmap_available": loc.heatmap is not None
+                                "coords": loc.coords,
+                                "heatmap_available": loc.heatmap is not None,
+                                "heatmap": loc.heatmap
                             }
                             for loc in injected_localizations
                         ]
@@ -262,8 +264,9 @@ class TamperPipeline:
                         "localized_slices": [
                             {
                                 "filename": loc.filename,
-                                "bounding_boxes": loc.coords,
-                                "heatmap_available": loc.heatmap is not None
+                                "coords": loc.coords,
+                                "heatmap_available": loc.heatmap is not None,
+                                "heatmap": loc.heatmap
                             }
                             for loc in removed_localizations
                         ]
@@ -376,7 +379,7 @@ class TamperPipeline:
 
             elif binary_result.classification.upper() == self.types.type2:  # Tampered
                 logger.info("Volume classified as Tampered - starting sub-classification and localization")
-                return self._handle_tampered_case(preprocessed_files, binary_result)
+                return self._handle_tampered_case(preprocessed_files, binary_result, sorted_files_list)
 
             else:
                 logger.error(f"Unknown classification result: {binary_result.classification}")
