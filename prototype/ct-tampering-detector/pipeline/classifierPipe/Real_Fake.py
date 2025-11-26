@@ -7,7 +7,7 @@ import logging
 from torch.utils.data import DataLoader
 import os
 
-from pipeline.architectures.architecture import MultiStreamCTModel
+from pipeline.architectures.achitecture import MultiStreamCTModel
 from pipeline.data_loaders.inference_dataset import MultiChannelCTDataset, EvalTransforms
 from pipeline.config.configs import ModelConfig
 

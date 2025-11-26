@@ -10,32 +10,25 @@ import torch
 
 class Config:
     # Model paths
-    BEST_CHECKPOINT = "models/CT_Injection_finetune_phases_v3.3/best_model.pth"
-    REAL_FAKE_MODEL_PATH = os.path.join("models", "binary_ct_kaggle_v1", "finetune", "ms_finetuned.pth")
-    INJECTED_REMOVED_MODEL_PATH = os.path.join("models", "efficientnet-b2-v13", "best_classifier_v2.pth")
+    BEST_CHECKPOINT = "prototype/ct-tampering-detector/pipeline/models/Inject_localize/best_model.pth"
+    REAL_FAKE_MODEL_PATH = "prototype/ct-tampering-detector/pipeline/models/classifier1/dn_finetune_best.pth"
+    INJECTED_REMOVED_MODEL_PATH = "prototype/ct-tampering-detector/pipeline/models/classifier2/best_classifier_v2.pth"
     
     # Removal Localization paths
-    REMOVAL_LOCALIZATION_DIR = "/content/drive/MyDrive/capstone_models/MultiChannelUNet-v1"
+    REMOVAL_LOCALIZATION_DIR = "prototype/ct-tampering-detector/pipeline/models/Remove_localize"
     REMOVAL_BEST_DICE_MODEL = os.path.join(REMOVAL_LOCALIZATION_DIR, "best_dice_model.pth")
-    REMOVAL_BEST_LOSS_MODEL = os.path.join(REMOVAL_LOCALIZATION_DIR, "best_loss_model.pth")
-    REMOVAL_SPLIT_INDICES = os.path.join(REMOVAL_LOCALIZATION_DIR, "split_indices.pth")
-    
-    # Data paths for removal localization
-    REMOVAL_DATA_ROOT = '/content/drive/MyDrive/Capstone/main/CT_Removal'
-    REMOVAL_CSV_PATH = os.path.join(REMOVAL_DATA_ROOT, 'data_v1.csv')
-    
+
     # Localization parameters
     LOCALIZATION_IMG_SIZE = 320
     REMOVAL_IMG_SIZE = 512  # Different from injection localization
     BATCH_SIZE = 4
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-config = Config()
 
 class ModelConfig:
     # Model paths - update these based on your actual saved models
-    REAL_FAKE_MODEL_PATH = os.path.join("models", "binary_ct_kaggle_v1", "finetune", "ms_finetuned.pth")
-    INJECTED_REMOVED_MODEL_PATH = os.path.join("models", "injected_removed_model.pth")  # Update if you have this
+    REAL_FAKE_MODEL_PATH = Config.REAL_FAKE_MODEL_PATH
+    INJECTED_REMOVED_MODEL_PATH = Config.INJECTED_REMOVED_MODEL_PATH
     
     # Training parameters that match your training script
     IMG_SIZE = 384

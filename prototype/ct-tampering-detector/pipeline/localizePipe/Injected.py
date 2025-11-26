@@ -14,7 +14,8 @@ from segmentation_models_pytorch import UnetPlusPlus
 from pipeline.data_loaders.localization_dataset import LocalizationDataset
 from pipeline.util.model_utils import load_model, get_transform
 from logs.logger import get_logger
-from config.configs import config
+from pipeline.config.configs import Config
+config = Config()
 
 logger = get_logger(__name__)
 

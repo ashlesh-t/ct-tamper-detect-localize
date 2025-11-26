@@ -13,7 +13,7 @@ from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 import numpy as np
 
-from config.configs import ModelConfig
+from pipeline.config.configs import ModelConfig
 from pipeline.classifiers import TamperClassifiers
 from pipeline.localize import Localize
 from pipeline.preProces.preProcess import preprocess

@@ -5,12 +5,9 @@ from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 from logs.logger import get_logger
 import time
+from pipeline.get_results import TamperPipeline
+
 logger = get_logger(__name__)
-
-class TamperPipeline:
-    def __init__(self):
-        pass
-
 # from pipeline.get_results import TamperPipeline  # Import your pipeline
 
 # --- HELPER: CSS GLOW EFFECT ---
