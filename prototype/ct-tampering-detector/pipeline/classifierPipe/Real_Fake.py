@@ -7,9 +7,10 @@ import logging
 from torch.utils.data import DataLoader
 import os
 
-from pipeline.architectures.achitecture import MultiStreamCTModel
+from pipeline.architectures.achitecture import MultiStreamCTModel, DenseNetBinary
 from pipeline.data_loaders.inference_dataset import MultiChannelCTDataset, EvalTransforms
 from pipeline.config.configs import ModelConfig
+from pipeline.types.types import Types  # Import Types for consistent labeling
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +23,13 @@ class RealFake:
         self.model = None
         self.last_slice_details = None
         self.last_volume_stats = None
+        self.types = Types()  # For consistent classification labels
         
     def load_model(self):
         """Load the trained model with proper weight handling"""
         try:
-            self.model = MultiStreamCTModel(
-                pretrained=False,  # We're loading our own weights
-                feature_dim=self.config.FEATURE_DIM,
-                num_classes=self.config.NUM_CLASSES
-            ).to(self.device)
+            # Use DenseNet to match checkpoint (dn_finetune_best.pth)
+            self.model = DenseNetBinary(pretrained=False, num_classes=self.config.NUM_CLASSES).to(self.device)
             
             # Check if model file exists
             if not os.path.exists(self.config.REAL_FAKE_MODEL_PATH):
@@ -53,11 +52,11 @@ class RealFake:
             else:
                 state_dict = checkpoint
                 
-            # Load state dict with strict=False to handle auxiliary classifiers
-            self.model.load_state_dict(state_dict, strict=False)
+            # Load state dict with strict=True (now matches arch)
+            self.model.load_state_dict(state_dict, strict=True)
             self.model.eval()
             
-            logger.info(f"Model loaded successfully from {self.config.REAL_FAKE_MODEL_PATH}")
+            logger.info(f"DenseNet model loaded successfully from {self.config.REAL_FAKE_MODEL_PATH}")
             if 'best_f1' in checkpoint:
                 logger.info(f"Model was trained with best F1: {checkpoint['best_f1']:.4f}")
                 
@@ -97,14 +96,13 @@ class RealFake:
                 images = batch['images'].to(self.device, non_blocking=True).float()
                 fnames = batch['fnames']
                 
-                # Use autocast for consistent behavior with training
-                with torch.amp.autocast(device_type='cuda' if self.device.type == 'cuda' else 'cpu'):
-                    outputs, _ = self.model(images)
-                    outputs = outputs.float()  # Ensure float32 for consistency
+                # DenseNet forward (no split, no autocast needed)
+                outputs = self.model(images)  # logits (B, 2)
+                outputs = outputs.float()  # Ensure float32 for consistency
                 
                 probs = torch.softmax(outputs, dim=1)
                 probs_fake = probs[:, 1].cpu().numpy()  # Probability of class 1 (Fake)
-                predictions = torch.argmax(outputs, dim=1).cpu().numpy()
+                predictions = (probs_fake > 0.5).astype(int)  # Threshold match standalone
                 
                 all_filenames.extend(fnames)
                 all_probs_fake.extend(probs_fake)
@@ -122,12 +120,12 @@ class RealFake:
         volume_confidence_fake = np.mean(probs_fake)
         volume_confidence_real = 1 - volume_confidence_fake
         
-        # Determine volume classification (using 0.5 threshold as in training)
-        if volume_confidence_fake > 0.44:
-            volume_classification = "Fake"
+        # Determine volume classification (using 0.5 threshold as in training/standalone)
+        if volume_confidence_fake > 0.5:
+            volume_classification = self.types.type2  # "FAKE"
             volume_confidence = volume_confidence_fake
         else:
-            volume_classification = "Real" 
+            volume_classification = self.types.type1  # "REAL"
             volume_confidence = volume_confidence_real
         
         # Identify affected slices (slices predicted as fake)
@@ -151,7 +149,7 @@ class RealFake:
         slice_details = [
             {
                 'filename': filenames[i],
-                'prediction': 'Fake' if predictions[i] == 1 else 'Real',
+                'prediction': self.types.type2 if predictions[i] == 1 else self.types.type1,  # "FAKE" or "REAL"
                 'fake_confidence': float(probs_fake[i]),
                 'prediction_binary': int(predictions[i])
             }
@@ -169,7 +167,7 @@ class RealFake:
     def get_results(self) -> Tuple[int, Any, List[str], Exception]:
         """Main method to get classification results"""
         try:
-            logger.info("Starting Real-Fake classification with MultiStreamCTModel")
+            logger.info("Starting Real-Fake classification with DenseNetBinary")
             
             # Run inference
             filenames, probs_fake, predictions = self.run_inference()

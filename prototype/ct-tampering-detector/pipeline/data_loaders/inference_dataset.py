@@ -86,36 +86,32 @@ class MultiChannelCTDataset(Dataset):
     def __len__(self) -> int:
         return len(self.slice_data)
 
+    # In MultiChannelCTDataset.__getitem__ (replace the stacking part)
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         item = self.slice_data[idx]
         channels = item["channels"]
         fname = item["fname"]
 
-        # Stack channels in order: [CT, ROI, FFT] -> (H, W, 3)
-        multi_channel = np.stack([
-            channels['CT'],
-            channels['ROI'],
-            channels['FFT']
-        ], axis=-1)
+        # For DenseNet: Use pre-stacked identical 3ch
+        if "multi_channel" in item:
+            multi_channel = item["multi_channel"]  # (H, W, 3) np, identical channels
+        else:
+            # Fallback stack (for old data)
+            multi_channel = np.stack([
+                channels['CT'],
+                channels['ROI'],
+                channels['FFT']
+            ], axis=-1)
 
-        # If the transform expects an RGB/PIL image, convert first
-        # If transform expects numpy array or tensor it can handle directly.
+        # Rest unchanged: to_rgb(PIL) if needed, then transform(PIL)
         img_for_transform = multi_channel
-        if isinstance(self.transform, transforms.Compose) or callable(self.transform):
-            # Caller-provided transform will decide how to interpret the input.
-            # Common scenario: transform expects PIL image -> convert
+        if self.transform:
             try:
-                # If transform includes ToPILImage, it will handle numpy, else try converting to RGB
                 img_for_transform = self.to_rgb(multi_channel)
             except Exception:
                 img_for_transform = multi_channel
-
-            transformed = self.transform(img_for_transform) if self.transform else None
+            transformed = self.transform(img_for_transform)
         else:
-            transformed = None
-
-        if transformed is None:
-            # Default fallback: convert numpy to tensor (C, H, W)
             transformed = torch.from_numpy(multi_channel).permute(2, 0, 1).float()
 
         return {

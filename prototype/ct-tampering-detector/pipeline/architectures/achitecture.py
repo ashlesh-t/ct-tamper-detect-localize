@@ -127,3 +127,17 @@ class MultiStreamCTModel(nn.Module):
             return logits, (aux_ct, aux_roi, aux_fft), out_feat
             
         return logits, out_feat
+# Add this to the end of architecture.py (after MultiStreamCTModel)
+
+from torchvision.models import densenet121, DenseNet121_Weights
+
+class DenseNetBinary(nn.Module):
+    def __init__(self, pretrained=True, num_classes=2):
+        super().__init__()
+        weights = DenseNet121_Weights.DEFAULT if pretrained else None
+        m = densenet121(weights=weights)
+        m.classifier = nn.Linear(m.classifier.in_features, num_classes)
+        self.model = m
+
+    def forward(self, x):
+        return self.model(x)

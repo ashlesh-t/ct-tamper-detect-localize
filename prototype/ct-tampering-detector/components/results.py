@@ -116,6 +116,14 @@ def show_results():
         border-radius: 8px;
         border: 1px solid #333;
     }
+    .disclaimer {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+        padding: 1rem;
+        margin: 1rem 0;
+        color: #856404;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -158,6 +166,9 @@ def show_results():
                    text-align: center; font-size: 2.5rem;">
             {classification.upper()}
         </h2>
+        <p style="text-align: center; color: #ccc; font-size: 1.2rem; margin-top: 1rem;">
+            Confidence: {confidence*100:.1f}%
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -177,8 +188,17 @@ def show_results():
 
     st.divider()
 
+    # Disclaimer Section
+    st.markdown("""
+    <div class="disclaimer">
+        <strong>⚠️ Important Disclaimer:</strong> This tool provides forensic analysis based on AI models and is intended for research/educational purposes only. 
+        Our predictions may contain errors or false positives/negatives. Always consult with qualified medical professionals for clinical decisions. 
+        The tool is not a substitute for expert medical judgment.
+    </div>
+    """, unsafe_allow_html=True)
+
     # Detailed Metrics Section
-    st.markdown("### 📊 Detailed Analysis Metrics")
+    st.markdown("### Detailed Analysis Metrics")
     
     if classification in ['Fake', 'Tampered']:
         # Tampered case - show detailed breakdown
@@ -343,7 +363,7 @@ def show_results():
                         st.warning("No localization data available for this slice")
                 
                 # Show slice details
-                st.markdown("##### 📋 Slice Details")
+                st.markdown("#####Slice Details")
                 detail_cols = st.columns(3)
                 with detail_cols[0]:
                     st.metric("Slice Index", selected_index)
@@ -358,7 +378,7 @@ def show_results():
             st.warning("No localized tampering regions found in the volume")
     
     elif volume_data is not None:
-        st.markdown("### 📄 Volume Summary")
+        st.markdown("### Volume Summary")
         # For real volumes, just show a sample slice
         sample_slice = volume_data[depth // 2] if volume_data.shape[0] > 0 else volume_data[0]
         sample_normalized = (sample_slice - sample_slice.min()) / (sample_slice.max() - sample_slice.min() + 1e-8)
