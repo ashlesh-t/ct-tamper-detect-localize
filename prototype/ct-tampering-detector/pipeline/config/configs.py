@@ -1,29 +1,24 @@
-# pipeline/config/configs.py
 import os
 import torch
-# config/configs.py
-import os
 
-# config/configs.py
-import os
-import torch
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+MODELS_DIR = os.path.join(PROJECT_ROOT, "pipeline", "models")
 
 class Config:
-    # Model paths
-    BEST_CHECKPOINT = "prototype/ct-tampering-detector/pipeline/models/Inject_localize/best_model.pth"
-    REAL_FAKE_MODEL_PATH = "prototype/ct-tampering-detector/pipeline/models/classifier1/dn_finetune_best.pth"
-    INJECTED_REMOVED_MODEL_PATH = "prototype/ct-tampering-detector/pipeline/models/classifier2/best_classifier_v2.pth"
-    
-    # Removal Localization paths
-    REMOVAL_LOCALIZATION_DIR = "prototype/ct-tampering-detector/pipeline/models/Remove_localize"
+    REAL_FAKE_MODEL_PATH = os.path.join(MODELS_DIR, "classifier1", "dn_finetune_best.pth")
+    INJECTED_REMOVED_MODEL_PATH = os.path.join(MODELS_DIR, "classifier2", "best_classifier_v2.pth")
+    BEST_CHECKPOINT = os.path.join(MODELS_DIR, "Inject_localize", "best_model.pth")
+
+    REMOVAL_LOCALIZATION_DIR = os.path.join(MODELS_DIR, "Remove_localize")
     REMOVAL_BEST_DICE_MODEL = os.path.join(REMOVAL_LOCALIZATION_DIR, "best_dice_model.pth")
+
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Localization parameters
     LOCALIZATION_IMG_SIZE = 320
-    REMOVAL_IMG_SIZE = 512  # Different from injection localization
+    REMOVAL_IMG_SIZE = 288 
     BATCH_SIZE = 4
-    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
+ 
 
 class ModelConfig:
     # Model paths - update these based on your actual saved models
