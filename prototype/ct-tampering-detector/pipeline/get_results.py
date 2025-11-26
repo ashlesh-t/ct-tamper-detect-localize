@@ -162,6 +162,7 @@ class TamperPipeline:
                 )
                 if result.filename:  # Only add non-empty results
                     localization_results.append(result)
+            print(localization_results)
                     
             logger.info(f"Localization completed: {len(localization_results)} results for type {localizer_type}")
             return localization_results
@@ -369,11 +370,11 @@ class TamperPipeline:
                        f"(confidence: {binary_result.confidence:.3f})")
 
             # Route based on classification result
-            if binary_result.classification == self.types.type1:  # Real
+            if binary_result.classification.upper() == self.types.type1:  # Real
                 logger.info("Volume classified as Real - returning results")
                 return self._handle_real_case(binary_result)
 
-            elif binary_result.classification == self.types.type2:  # Tampered
+            elif binary_result.classification.upper() == self.types.type2:  # Tampered
                 logger.info("Volume classified as Tampered - starting sub-classification and localization")
                 return self._handle_tampered_case(preprocessed_files, binary_result)
 

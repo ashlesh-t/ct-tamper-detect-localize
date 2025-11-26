@@ -123,7 +123,7 @@ class RealFake:
         volume_confidence_real = 1 - volume_confidence_fake
         
         # Determine volume classification (using 0.5 threshold as in training)
-        if volume_confidence_fake > 0.5:
+        if volume_confidence_fake > 0.48:
             volume_classification = "Fake"
             volume_confidence = volume_confidence_fake
         else:

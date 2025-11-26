@@ -44,7 +44,12 @@ class InferenceDataset(Dataset):
 class StackedChannelsToRGB:
     """Utility to convert multi-channel numpy arrays into a RGB PIL.Image."""
     def __call__(self, arr: np.ndarray) -> Image.Image:
+        # Ensure input is numpy
+        if not isinstance(arr, np.ndarray):
+            arr = np.array(arr)
+
         arr = arr.astype(np.float32)
+
         if arr.ndim != 3 or arr.shape[2] not in (1, 3):
             raise ValueError("Input must be HxWx1 or HxWx3")
         # Normalize per channel to [0,1] then scale to 0-255
@@ -128,7 +133,6 @@ class EvalTransforms:
 
     def __call__(self, x_np: np.ndarray) -> torch.Tensor:
         transform_chain = transforms.Compose([
-            transforms.ToPILImage(),
             transforms.Resize((self.img_size, self.img_size)),
             transforms.ToTensor(),
             transforms.Normalize(mean=self.mean, std=self.std)

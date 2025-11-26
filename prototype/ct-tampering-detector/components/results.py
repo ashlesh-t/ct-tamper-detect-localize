@@ -131,8 +131,15 @@ def show_results():
         return
 
     classification = data.get('classification', 'Unknown')
-    confidence = data.get('confidence', 0)
-    
+    raw_conf = data.get('confidence', 0)
+
+    # If dict → use overall confidence
+    if isinstance(raw_conf, dict):
+        confidence = raw_conf.get('overall', 0)
+    else:
+        confidence = raw_conf
+
+        
     # Apply appropriate glow based on classification
     if classification in ['Fake', 'Tampered']:
         apply_red_glow()

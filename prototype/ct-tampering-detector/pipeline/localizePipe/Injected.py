@@ -47,11 +47,13 @@ class Injected:
             encoder_name="resnet34",
             encoder_weights=None,
             classes=1,
-            activation=None
+            activation=None,
+            decoder_attention_type="scse"
         )
+
         
         # Load weights
-        self.model = load_model(ckpt_path, self.model, self.device)
+        self.model = load_model(ckpt_path, self.model, self.device,strict=False)
         logger.info("Injected localization model loaded successfully")
 
     def _preprocess_slice(self, raw: np.ndarray) -> torch.Tensor:
@@ -220,12 +222,13 @@ class Injected:
         affected_slices = [s for s in self.slice_data if s["fname"] in affected_fnames]
         logger.info(f"Processing {len(affected_slices)} slices for injection localization")
 
+        # print("DEBUG RAW slice_data:", affected_slices)
         results = []
         
         for slice_data in tqdm(affected_slices, desc="Localizing injections"):
             try:
                 fname = slice_data["fname"]
-                raw_data = slice_data["data"]
+                raw_data = slice_data["channels"]["CT"]
                 original_shape = raw_data.shape
                 
                 # Preprocess
