@@ -17,7 +17,7 @@ class Config:
     # Localization parameters
     LOCALIZATION_IMG_SIZE = 320
     REMOVAL_IMG_SIZE = 288 
-    BATCH_SIZE = 4
+    BATCH_SIZE = 8
  
 
 class ModelConfig:

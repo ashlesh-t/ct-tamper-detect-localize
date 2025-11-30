@@ -94,9 +94,26 @@ class MultiChannelCTDataset(Dataset):
 
         # For DenseNet: Use pre-stacked identical 3ch
         if "multi_channel" in item:
-            multi_channel = item["multi_channel"]  # (H, W, 3) np, identical channels
+            multi_channel = item["multi_channel"]
+
+        # Case 2: Only CT provided → auto-create CT, BLACK, FFT
+        elif "CT" in channels and (
+            "ROI" not in channels or "FFT" not in channels
+        ):
+            ct = channels["CT"].astype(np.float32)
+
+            # ROI = black
+            roi = np.zeros_like(ct, dtype=np.float32)
+
+            # FFT magnitude
+            fft = np.fft.fftshift(np.fft.fft2(ct))
+            fft = np.abs(fft).astype(np.float32)
+            fft = (fft - fft.min()) / (fft.max() - fft.min() + 1e-8)
+
+            multi_channel = np.stack([ct, roi, fft], axis=-1)
+
+        # Case 3: Old behavior (already complete)
         else:
-            # Fallback stack (for old data)
             multi_channel = np.stack([
                 channels['CT'],
                 channels['ROI'],
@@ -106,10 +123,7 @@ class MultiChannelCTDataset(Dataset):
         # Rest unchanged: to_rgb(PIL) if needed, then transform(PIL)
         img_for_transform = multi_channel
         if self.transform:
-            try:
-                img_for_transform = self.to_rgb(multi_channel)
-            except Exception:
-                img_for_transform = multi_channel
+
             transformed = self.transform(img_for_transform)
         else:
             transformed = torch.from_numpy(multi_channel).permute(2, 0, 1).float()
@@ -129,6 +143,7 @@ class EvalTransforms:
 
     def __call__(self, x_np: np.ndarray) -> torch.Tensor:
         transform_chain = transforms.Compose([
+            transforms.ToPILImage(),
             transforms.Resize((self.img_size, self.img_size)),
             transforms.ToTensor(),
             transforms.Normalize(mean=self.mean, std=self.std)

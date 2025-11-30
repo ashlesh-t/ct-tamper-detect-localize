@@ -1,274 +1,215 @@
-import os
-import random
-import pickle
-import shutil
+from torch.cuda.amp import GradScaler
+import os, random, json, math, time
+from glob import glob
+from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
+from tqdm.autonotebook import tqdm
+
+# sklearn
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, roc_auc_score, precision_recall_curve, roc_curve
+from sklearn.isotonic import IsotonicRegression
+
+# pytorch
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-from torchvision.models import efficientnet_b2, densenet121
-from PIL import Image
-from tqdm.auto import tqdm
-from glob import glob
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from torchvision.models import densenet121, DenseNet121_Weights, efficientnet_v2_m, EfficientNet_V2_M_Weights
+from torch.cuda.amp import autocast, GradScaler
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
-# ==========================================
-# 1. CONFIGURATION
-# ==========================================
-DRIVE_ROOT = "/content/drive/MyDrive/preprocessed_data_v3"
-CKPT_DIR = f"{DRIVE_ROOT}/checkpoints/efficientnet-b2-v13"
-BEST_MODEL_PATH = os.path.join(CKPT_DIR, "best_classifier_v2.pth")
+# ===== Import your model classes =====
 
-# New Test Dataset Location
-NEW_TEST_DIR = os.path.join(DRIVE_ROOT, "Injected_remove_classifier_test")
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+print("Device:", DEVICE)
 
-# Output for Results
-OUTPUT_DIR = "/content/drive/MyDrive/capstone_models/balanced_test_results"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# ==========================================
-# 2. DATASET CREATION LOGIC
-# ==========================================
-def load_all_patients(ckpt_dir):
-    """Loads BOTH Train and Validation patients"""
-    split_path = os.path.join(ckpt_dir, "data_split_v2.pkl")
-    if not os.path.exists(split_path):
-        raise FileNotFoundError(f"Split file not found at {split_path}")
-    
-    with open(split_path, "rb") as f:
-        split = pickle.load(f)
-    
-    # Combine Train + Val
-    all_pts = split["train"] + split["val"]
-    print(f"Loaded source pool: {len(split['train'])} Train + {len(split['val'])} Val = {len(all_pts)} Total Patients")
-    return all_pts
-
-def create_balanced_dataset(source_patients, target_dir):
-    """Creates a physical 50/50 balanced dataset on disk"""
-    
-    # 1. Separate by class
-    inj_pts = [p for p in source_patients if p['label'] == 0]
-    rem_pts = [p for p in source_patients if p['label'] == 1]
-    
-    # 2. Determine balanced count (Limited by the smaller class)
-    # limit = 200 # Uncomment if you want a fixed small number like 200 total
-    limit = min(len(inj_pts), len(rem_pts)) # Use maximum possible balanced amount
-    
-    print(f"\n--- Balancing Data ---")
-    print(f"Available Injected: {len(inj_pts)}")
-    print(f"Available Removed:  {len(rem_pts)}")
-    print(f"Target per class:   {limit}")
-    
-    sampled_inj = random.sample(inj_pts, limit)
-    sampled_rem = random.sample(rem_pts, limit)
-    
-    # 3. Create Directories
-    if os.path.exists(target_dir):
-        print(f"Cleaning existing test dir: {target_dir}")
-        shutil.rmtree(target_dir)
-    
-    dir_inj = os.path.join(target_dir, "injected")
-    dir_rem = os.path.join(target_dir, "removed")
-    os.makedirs(dir_inj, exist_ok=True)
-    os.makedirs(dir_rem, exist_ok=True)
-    
-    # 4. Copy 1 Slice Per Patient
-    print(f"Copying files to {target_dir}...")
-    
-    manifest = [] # To keep track of what we saved
-    
-    # Helper to copy
-    def copy_samples(patients, dest_folder, label_name):
-        for p in tqdm(patients, desc=f"Copying {label_name}"):
-            # Pick 1 random slice
-            src_path = random.choice(p['slices'])
-            fname = os.path.basename(src_path)
-            dst_path = os.path.join(dest_folder, fname)
-            
-            shutil.copy2(src_path, dst_path)
-            
-            manifest.append({
-                "path": dst_path,
-                "label": p['label'], # 0 or 1
-                "original_patient_id": p['patient_id']
-            })
-
-    copy_samples(sampled_inj, dir_inj, "Injected")
-    copy_samples(sampled_rem, dir_rem, "Removed")
-    
-    print(f"✅ Created Balanced Dataset with {len(manifest)} images.")
-    return manifest
-
-# ==========================================
-# 3. MODEL ARCHITECTURE & UTILS
-# ==========================================
-# (Standard classes required for loading)
-class ChannelAttention(nn.Module):
-    def __init__(self, channels, reduction=16):
+class CBAM(nn.Module):
+    def __init__(self, in_ch, reduction=16):
         super().__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
-        self.fc = nn.Sequential(
-            nn.Conv2d(channels, channels // reduction, 1, bias=False),
-            nn.ReLU(),
-            nn.Conv2d(channels // reduction, channels, 1, bias=False)
-        )
-        self.sigmoid = nn.Sigmoid()
+        self.avg = nn.AdaptiveAvgPool2d(1); self.max = nn.AdaptiveMaxPool2d(1)
+        self.fc = nn.Sequential(nn.Linear(in_ch, in_ch//reduction), nn.ReLU(), nn.Linear(in_ch//reduction, in_ch))
+        self.sig = nn.Sigmoid()
+        self.spatial = nn.Conv2d(2,1,kernel_size=7,padding=3,bias=False)
     def forward(self, x):
-        avg_out = self.fc(self.avg_pool(x))
-        max_out = self.fc(self.max_pool(x))
-        return self.sigmoid(avg_out + max_out)
+        b,c,_,_ = x.shape
+        avg = self.avg(x).view(b,c); maxv = self.max(x).view(b,c)
+        att = self.sig(self.fc(avg)+self.fc(maxv)).view(b,c,1,1)
+        x = x * att
+        a = torch.mean(x, dim=1, keepdim=True); m,_ = torch.max(x, dim=1, keepdim=True)
+        x = x * self.sig(self.spatial(torch.cat([a,m], dim=1)))
+        return x
 
-class EnhancedDualStreamFakeCT(nn.Module):
-    def __init__(self):
+def ensure_3ch(arr, img_size=384):
+    if arr is None: return np.zeros((img_size,img_size,3),dtype=np.float32)
+    if arr.ndim==2: return np.stack([arr]*3,axis=-1)
+    if arr.shape[-1] >= 3: return arr[:, :, :3]
+    ch = arr.shape[-1]
+    pad = np.zeros((arr.shape[0], arr.shape[1], 3-ch), dtype=arr.dtype)
+    return np.concatenate([arr, pad], axis=-1)
+
+class MultiStreamModel(nn.Module):
+    def __init__(self, pretrained=True, feature_dim=1280, num_classes=2):
         super().__init__()
-        backbone1 = efficientnet_b2(weights=None)
-        self.stream1_features = backbone1.features
-        self.stream1_attention = ChannelAttention(1408)
-        self.stream1_pool = nn.AdaptiveAvgPool2d(1)
+        weights = EfficientNet_V2_M_Weights.DEFAULT if pretrained else None
+        # helper to make single-channel backbone
+        def make_stream():
+            m = efficientnet_v2_m(weights=weights)
+            # replace first conv to accept 1 channel:
+            first = list(m.features.children())[0][0]
+            new_conv = nn.Conv2d(1, first.out_channels, kernel_size=first.kernel_size, stride=first.stride, padding=first.padding, bias=False)
+            with torch.no_grad():
+                w = first.weight; w_mean = w.mean(dim=1, keepdim=True)
+                new_conv.weight.copy_(w_mean)
+            m.features[0][0] = new_conv
+            feat = nn.Sequential(*list(m.features.children()))
+            return feat
+        self.ct_stream = make_stream(); self.roi_stream = make_stream(); self.fft_stream = make_stream()
+        self.cbam1 = CBAM(feature_dim); self.cbam2 = CBAM(feature_dim); self.cbam3 = CBAM(feature_dim)
+        self.cross_attn = nn.MultiheadAttention(feature_dim, num_heads=8, batch_first=True)
+        self.fusion = nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten(),
+                                    nn.BatchNorm1d(feature_dim*3),
+                                    nn.Linear(feature_dim*3, 1024), nn.ReLU(), nn.Dropout(0.4),
+                                    nn.Linear(1024,512), nn.ReLU(), nn.Dropout(0.3))
+        self.classifier = nn.Linear(512, num_classes)
+        self.aux_ct = nn.Linear(feature_dim, num_classes)
+        self.aux_roi = nn.Linear(feature_dim, num_classes)
+        self.aux_fft = nn.Linear(feature_dim, num_classes)
+    def forward(self, x, return_aux=False):
+        ct = x[:,0:1,:,:]; roi = x[:,1:2,:,:]; fft = x[:,2:3,:,:]
+        fct = self.ct_stream(ct); froi = self.roi_stream(roi); ffft = self.fft_stream(fft)
+        fct = self.cbam1(fct); froi = self.cbam2(froi); ffft = self.cbam3(ffft)
+        b,c,h,w = fct.shape
+        def to_seq(t): return t.view(b,c,-1).permute(0,2,1)
+        seq_ct = to_seq(fct); seq_roi = to_seq(froi); seq_fft = to_seq(ffft)
+        ct_att,_ = self.cross_attn(seq_ct, seq_roi, seq_roi)
+        roi_att,_ = self.cross_attn(seq_roi, seq_fft, seq_fft)
+        fft_att,_ = self.cross_attn(seq_fft, seq_ct, seq_ct)
+        def from_seq(seq): return seq.permute(0,2,1).view(b,c,h,w)
+        ct_att = from_seq(ct_att); roi_att = from_seq(roi_att); fft_att = from_seq(fft_att)
+        fused = torch.cat([ct_att, roi_att, fft_att], dim=1)
+        out_feat = self.fusion(fused)
+        logits = self.classifier(out_feat)
+        if return_aux:
+            aux_ct = self.aux_ct(F.adaptive_avg_pool2d(fct,1).flatten(1))
+            aux_roi = self.aux_roi(F.adaptive_avg_pool2d(froi,1).flatten(1))
+            aux_fft = self.aux_fft(F.adaptive_avg_pool2d(ffft,1).flatten(1))
+            return logits, (aux_ct, aux_roi, aux_fft), out_feat
+        return logits, out_feat
 
-        backbone2 = densenet121(weights=None)
-        self.stream2_features = backbone2.features
-        self.stream2_attention = ChannelAttention(1024)
-        self.stream2_pool = nn.AdaptiveAvgPool2d(1)
-
-        self.fusion = nn.Sequential(
-            nn.Linear(1408 + 1024, 1024), nn.ReLU(), nn.BatchNorm1d(1024), nn.Dropout(0.5),
-            nn.Linear(1024, 512), nn.ReLU(), nn.BatchNorm1d(512), nn.Dropout(0.4),
-            nn.Linear(512, 256), nn.ReLU(), nn.BatchNorm1d(256), nn.Dropout(0.3),
-            nn.Linear(256, 128), nn.ReLU(), nn.BatchNorm1d(128), nn.Dropout(0.2),
-            nn.Linear(128, 2),
-        )
-
-    def forward(self, x):
-        x1 = x[:, 0:1].repeat(1, 3, 1, 1)
-        f1 = self.stream1_features(x1)
-        f1 = self.stream1_pool(f1 * self.stream1_attention(f1)).view(f1.size(0), -1)
+# ---------------------------
+# DenseNet model wrapper
+# ---------------------------
+class DenseNetBinary(nn.Module):
+    def __init__(self, pretrained=True, num_classes=2):
+        super().__init__()
+        weights = DenseNet121_Weights.DEFAULT if pretrained else None
+        m = densenet121(weights=weights)
+        m.classifier = nn.Linear(m.classifier.in_features, num_classes)
+        self.model = m
+    def forward(self, x): return self.model(x)
         
-        x2 = torch.cat([x[:, 1:3], x[:, 1:2]], dim=1)
-        f2 = self.stream2_features(x2)
-        f2 = self.stream2_pool(f2 * self.stream2_attention(f2)).view(f2.size(0), -1)
-        
-        return self.fusion(torch.cat([f1, f2], dim=1))
+# ------------------------
+# Dataset for Inference
+# ------------------------
+class InferenceDataset(Dataset):
+    def __init__(self, file_list, transform, img_size=384):
+        self.file_list = file_list
+        self.transform = transform
+        self.img_size = img_size
 
-class StackedChannelsToRGB:
-    def __call__(self, arr):
-        arr = arr.astype(np.float32)
-        if arr.shape[2] == 3:
-            for c in range(3):
-                ch = arr[:, :, c]
-                ch = (ch - ch.min()) / (ch.max() - ch.min() + 1e-6)
-                arr[:, :, c] = ch
-            rgb = (arr * 255).astype(np.uint8)
-        else:
-            rgb = (arr[:, :, 0] * 255).astype(np.uint8)
-            rgb = np.stack([rgb] * 3, axis=-1)
-        return Image.fromarray(rgb)
+    def __len__(self):
+        return len(self.file_list)
 
-def process_image(fpath, transform, stats):
-    try:
-        hu = np.load(fpath).astype(np.float32)
-        vis_img = StackedChannelsToRGB()(hu.copy())
-        hu_tensor = transform(vis_img)
-        for c in range(3):
-            hu_tensor[c] = (hu_tensor[c] - stats[c]["mean"]) / (stats[c]["std"] + 1e-6)
-        return hu_tensor.unsqueeze(0), vis_img
-    except: return None, None
+    def __getitem__(self, idx):
+        fpath = self.file_list[idx]
+        arr = np.load(fpath).astype(np.float32)
+        arr = ensure_3ch(arr, img_size=self.img_size)
 
-# ==========================================
-# 4. EXECUTION FLOW
-# ==========================================
+        img = self.transform(arr)
+        return img, os.path.basename(fpath)
 
-# --- STEP 1: CREATE THE DATASET ---
-print(">>> Step 1: Creating New Dataset...")
-all_patients = load_all_patients(CKPT_DIR)
-manifest = create_balanced_dataset(all_patients, NEW_TEST_DIR)
+eval_transform = transforms.Compose([
+    transforms.ToPILImage(),
+    transforms.Resize((384,384)),
+    transforms.ToTensor(),
+    transforms.Normalize([0.5]*3, [0.5]*3)
+])
 
-# --- STEP 2: LOAD MODEL ---
-print("\n>>> Step 2: Loading Model...")
-model = EnhancedDualStreamFakeCT().to(device)
-checkpoint = torch.load(BEST_MODEL_PATH, map_location=device)
+# --------------------------------
+# Model Loading Utility
+# --------------------------------
+def load_model(best_ckpt_path, model_type="multistream"):
+    if model_type == "multistream":
+        model = MultiStreamModel(pretrained=False)
+    else:
+        model = DenseNetBinary(pretrained=False)
 
-if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-    model.load_state_dict(checkpoint['model_state_dict'])
-    stats = checkpoint.get('channel_stats')
-else:
-    model.load_state_dict(checkpoint)
-    stats = None
+    ck = torch.load(best_ckpt_path, map_location=DEVICE, weights_only=False)
+    model.load_state_dict(ck['model_state'])
+    model.to(DEVICE)
+    model.eval()
+    return model
 
-if not stats:
-    stats = {0: {'mean': 0.5, 'std': 0.5}, 1: {'mean': 0.5, 'std': 0.5}, 2: {'mean': 0.5, 'std': 0.5}}
+# --------------------------------
+# Prediction Function
+# --------------------------------
+def predict_patient(patient_dir, model, model_type="multistream"):
+    # print(os.listdir(patient_dir))
+    files = sorted([os.path.join(patient_dir, f) for f in os.listdir(patient_dir) if f.endswith(".npy")])
+    # print("Files",files)
+    ds = InferenceDataset(files, eval_transform)
+    loader = DataLoader(ds, batch_size=1, shuffle=False)
 
-model.eval()
+    slice_preds = []
+    slice_probs = []
 
-# --- STEP 3: RUN INFERENCE ON NEW DATASET ---
-print("\n>>> Step 3: Testing on New Dataset...")
-val_tf = transforms.Compose([transforms.Resize((288, 288)), transforms.ToTensor()])
+    with torch.inference_mode():
+        for img, fname in loader:
+            img = img.to(DEVICE).float()
+            
+            if model_type == "multistream":
+                out, _ = model(img)
+            else:
+                out = model(img)
 
-results = []
-# Iterate through the manifest we just created
-for item in tqdm(manifest, desc="Inferencing"):
-    img_tensor, vis_img = process_image(item['path'], val_tf, stats)
-    if img_tensor is None: continue
+            prob = F.softmax(out, dim=1)[0, 1].item()  # Tampered probability
+            pred = int(prob > 0.5)
+
+            slice_preds.append(pred)
+            slice_probs.append(prob)
+
+            print(f"Slice {fname}: ProbTampered={prob:.3f} → {'Tampered' if pred else 'Real'}")
+    print("slicePreds ",slice_preds)
+    print("sliceProbs ",slice_probs)
+    avg_prob = np.mean(slice_probs)
+    majority_vote = 1 if slice_preds.count(1) >= len(slice_preds) / 2 else 0
+
+    print("\n=========== FINAL PATIENT RESULT ===========")
+    print(f"Slices: {len(slice_preds)}")
+    print(f"Avg Tampered Probability: {avg_prob:.3f}")
+    print(f"Majority Vote: {'Tampered' if majority_vote else 'Real'}")
+    print("===========================================\n")
+
+    return slice_preds, slice_probs, majority_vote, avg_prob
+
+
+# --------------------------------
+# Example Run
+# --------------------------------
+if __name__ == "__main__":
+    # ▶ CHANGE THESE 2 PATHS
+    injection = "/home/ashu/capstone/main/data/CT_Injection/1.3.6.1.4.1.14519.5.2.1.6279.6001.106419850406056634877579573537_SD-20251129T201750Z-1-001/1.3.6.1.4.1.14519.5.2.1.6279.6001.106419850406056634877579573537_SD"
+    removal = "/home/ashu/capstone/main/data/CT_Removal/1.3.6.1.4.1.14519.5.2.1.6279.6001.106164978370116976238911317774_SD-20251129T201938Z-1-001/1.3.6.1.4.1.14519.5.2.1.6279.6001.106164978370116976238911317774_SD"
+    REAL1 = "/home/ashu/capstone/main/data/True_Malignant/ff1024e0-d8bc-4a3e-9b2b-8905ec44de3c_cluster2-20251129T202246Z-1-001/ff1024e0-d8bc-4a3e-9b2b-8905ec44de3c_cluster2"
+    REAL2 = "/home/ashu/capstone/main/data/True_Beningn"
     
-    with torch.no_grad():
-        img_tensor = img_tensor.to(device)
-        logits = model(img_tensor)
-        probs = torch.softmax(logits, 1)
-        pred = logits.argmax(1).item()
-        conf = probs[0][pred].item() * 100
-        
-    results.append({
-        "path": item['path'],
-        "vis": vis_img,
-        "true": item['label'],
-        "pred": pred,
-        "conf": conf,
-        "correct": item['label'] == pred
-    })
-
-# ==========================================
-# 5. METRICS & VISUALIZATION
-# ==========================================
-y_true = [r['true'] for r in results]
-y_pred = [r['pred'] for r in results]
-classes = ["Injected", "Removed"]
-
-# Metrics
-acc = accuracy_score(y_true, y_pred)
-print("\n" + "="*40)
-print(f" NEW DATASET RESULTS (Size: {len(results)})")
-print("="*40)
-print(f"Accuracy: {acc:.2%}")
-print(classification_report(y_true, y_pred, target_names=classes, digits=4))
-
-# Confusion Matrix
-cm = confusion_matrix(y_true, y_pred)
-plt.figure(figsize=(6, 5))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=classes, yticklabels=classes)
-plt.title('Confusion Matrix (Balanced Test Set)')
-plt.savefig(os.path.join(OUTPUT_DIR, "balanced_cm.png"))
-plt.show()
-
-# Top 10 Visuals
-fig, axes = plt.subplots(2, 5, figsize=(20, 9))
-axes = axes.flatten()
-print("\nTop 10 Predictions:")
-for i, res in enumerate(results[:10]):
-    ax = axes[i]
-    ax.imshow(res['vis'])
-    col = 'green' if res['correct'] else 'red'
-    ax.set_title(f"GT: {classes[res['true']]}\nPred: {classes[res['pred']]}\nConf: {res['conf']:.1f}%", color=col, fontweight='bold')
-    ax.axis('off')
-    print(f"Img: {os.path.basename(res['path'])} | GT: {classes[res['true']]} | Pred: {classes[res['pred']]} | {res['conf']:.1f}%")
-
-plt.tight_layout()
-plt.savefig(os.path.join(OUTPUT_DIR, "top_10_balanced.png"))
-plt.show()
-
-print(f"\n✅ All results saved to: {OUTPUT_DIR}")
-print(f"✅ New Dataset saved at: {NEW_TEST_DIR}")
+    best_model_ckpt = "/home/ashu/capstone/main/prototype/ct-tampering-detector/pipeline/models/classifier1/dn_phase1_best.pth"
+    model = load_model(best_model_ckpt, model_type="densenet")
+    
+    
+    for idx,path in enumerate([injection,removal,REAL1,REAL2]):
+        print("PREDICTING!!! for class :: ",idx)
+        predict_patient(path, model, model_type="densenet")

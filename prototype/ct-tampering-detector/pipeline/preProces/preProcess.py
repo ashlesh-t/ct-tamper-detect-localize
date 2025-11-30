@@ -1,5 +1,3 @@
-import numpy as np
-import cv2
 
 # pipeline/preProces/preProcess.py
 import numpy as np
@@ -63,43 +61,6 @@ def global_preprocess(img, target_img_size=256,
         img_final = img_resized
 
     return img_final.astype(np.float32)
-
-
-def preprocess(sorted_file_list):
-    """
-    sorted_file_list: list of dicts with keys:
-        - "fname": filename
-        - "data": path to .npy file
-    Returns: list of dicts with processed arrays
-    """
-
-    all_samples = []
-
-    for data in sorted_file_list:
-        fpath = data.get("data")
-        fname = data.get("fname")
-
-        if fpath is None or fname is None:
-            continue
-
-        try:
-            img = np.load(fpath)
-
-            # ensure it's 2D
-            if img.ndim > 2:
-                img = img.squeeze()
-            
-            pre_processed_img = global_preprocess(img)
-
-            all_samples.append({
-                "fname": fname,
-                "data": pre_processed_img
-            })
-
-        except Exception as e:
-            print(f"Error processing {fpath}: {e}")
-
-    return all_samples
 
 
 class CTMultiChannelPreprocessor:
@@ -209,36 +170,12 @@ def ensure_3ch(arr, img_size=384):
     pad = np.zeros((arr.shape[0], arr.shape[1], 3 - ch), dtype=arr.dtype)
     return np.concatenate([arr, pad], axis=-1)
 
-# Update the preprocess overload (replace the existing def preprocess at bottom)
-def preprocess(sorted_file_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def preprocess(sorted_file_list: List[Dict[str, Any]], for_real_fake: bool = False) -> List[Dict[str, Any]]:
     """
-    Preprocessing aligned with working standalone: Stack identical CT to 3ch.
-    (ROI/FFT optional for multi-stream; disabled for now to match DenseNet).
+    Preprocessing with mode selector.
+    - If for_real_fake=True: Minimal (stack identical raw CT to 3ch, no enhancements). Matches standalone.
+    - Else: Full multi-channel (CT/ROI/FFT with CLAHE/gamma/etc.) for injected/removed.
     """
-    # Reuse your global_preprocess_ct for CT (CLAHE/gamma/etc.)
-    def process_ct_slice(ct_data: np.ndarray, target_size=384) -> np.ndarray:
-        # Your existing global_preprocess_ct code here (copy from class)
-        img = ct_data.astype(np.float32)
-        img_norm = (img - img.min()) / (img.max() - img.min() + 1e-6)
-        img_u8 = (img_norm * 255).astype(np.uint8)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        img_clahe = clahe.apply(img_u8).astype(np.float32) / 255.0
-        gamma = 0.8
-        img_gamma = np.power(img_clahe, gamma)
-        img_gamma = (img_gamma - img_gamma.min()) / (img_gamma.max() - img_gamma.min() + 1e-6)
-        thresh = (img_gamma > 0.05).astype(np.uint8)
-        coords = cv2.findNonZero(thresh)
-        if coords is not None:
-            x, y, w, h = cv2.boundingRect(coords)
-            img_crop = img_gamma[y:y+h, x:x+w]
-        else:
-            img_crop = img_gamma
-        img_resized = cv2.resize(img_crop, (target_size, target_size), interpolation=cv2.INTER_LINEAR)
-        sharpen_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)
-        img_sharp = cv2.filter2D(img_resized, -1, sharpen_kernel)
-        img_final = np.clip(img_sharp, 0, 1)
-        return img_final.astype(np.float32)
-
     processed_samples = []
     for data_item in sorted_file_list:
         fname = data_item.get("fname")
@@ -247,20 +184,31 @@ def preprocess(sorted_file_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             logger.warning(f"Skipping invalid data item: {fname}")
             continue
         try:
-            # Process CT only
-            ct_processed = process_ct_slice(ct_data, target_size=384)
-            # Stack identical to 3ch (match working code)
-            multi_channel = ensure_3ch(ct_processed, img_size=384)
-            # For compatibility (keep "channels" key, but single-derived)
-            channels = {'CT': ct_processed, 'ROI': ct_processed, 'FFT': ct_processed}  # Identical for now
-            processed_samples.append({
-                "fname": fname,
-                "channels": channels,
-                "original_shape": ct_data.shape,
-                "multi_channel": multi_channel  # New: Direct 3ch np for DenseNet
-            })
+            if for_real_fake:
+                # Minimal: Like standalone - raw to 3ch stack, no alterations
+                raw_ct = ct_data.astype(np.float32)
+                # multi_channel = ensure_3ch(raw_ct, img_size=384)  # Stack identical, no resize/enhance
+                # Dummy channels for compatibility (identical raw)
+                channels = {'CT': raw_ct}
+                processed_samples.append({
+                    "fname": fname,
+                    "channels": channels,
+                    "original_shape": raw_ct.shape,
+                })
+            else:
+                # Full multi-channel: Use existing logic (CT process + ROI/FFT gen)
+                preprocessor = CTMultiChannelPreprocessor(target_size=384)
+                channels = preprocessor.preprocess_single_slice(ct_data)
+                ct_processed = channels['CT']
+                multi_channel = ensure_3ch(ct_processed, img_size=384)  # Stack for compatibility
+                processed_samples.append({
+                    "fname": fname,
+                    "channels": channels,
+                    "original_shape": ct_data.shape,
+                    "multi_channel": multi_channel
+                })
         except Exception as e:
             logger.error(f"Error processing {fname}: {e}")
             continue
-    logger.info(f"Successfully processed {len(processed_samples)} slices")
+    logger.info(f"Successfully processed {len(processed_samples)} slices (mode: {'real_fake' if for_real_fake else 'multi_channel'})")
     return processed_samples

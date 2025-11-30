@@ -116,7 +116,7 @@ class TamperPipeline:
             else:
                 raise ValueError(f"Unknown classifier type: {classifier_type}")
                 
-        except Exception as e:
+        except Exception as e:  
             logger.error(f"Classification failed for type {classifier_type}: {e}")
             return ClassificationResult(
                 status=500,
@@ -348,6 +348,7 @@ class TamperPipeline:
             # Step 1: Multi-channel preprocessing (CT, ROI, FFT generation)
             logger.info("Starting multi-channel preprocessing...")
             preprocessed_files = preprocess(sorted_files_list)
+            real_fake_processed = preprocess(sorted_files_list,for_real_fake=True)
             
             if not preprocessed_files:
                 return 500, {
@@ -362,7 +363,7 @@ class TamperPipeline:
 
             # Step 2: Enhanced binary classification (real vs. tampered)
             logger.info("Starting real/fake classification with multi-channel model...")
-            binary_result = self._classify(preprocessed_files, len(preprocessed_files), classifier_type=1)
+            binary_result = self._classify(real_fake_processed, len(preprocessed_files), classifier_type=1)
             
             if binary_result.error:
                 logger.error(f"Binary classification failed: {binary_result.error}")

@@ -17,3 +17,9 @@ link : ``
 
 1. load .tar file `docker load -i ct_app.tar`
 2. RUN with GPU if available `docker run --gpus all -p 8501:8501 ct-app`
+
+To RUN 
+
+`cd prototype/ct-tampering-detector/`
+
+do all chores or just run the docker image by  downloading .tar

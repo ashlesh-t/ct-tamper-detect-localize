@@ -74,7 +74,7 @@ class RealFake:
         
         return DataLoader(
             dataset,
-            batch_size=self.config.BATCH_SIZE,
+            batch_size=1,
             shuffle=False,
             num_workers=2,
             pin_memory=True
@@ -91,7 +91,7 @@ class RealFake:
         all_probs_fake = []
         all_predictions = []
         
-        with torch.no_grad():
+        with torch.inference_mode():
             for batch in dataloader:
                 images = batch['images'].to(self.device, non_blocking=True).float()
                 fnames = batch['fnames']
@@ -111,22 +111,26 @@ class RealFake:
         return all_filenames, all_probs_fake, all_predictions
     
     def aggregate_volume_prediction(self, 
-                                  filenames: List[str], 
-                                  probs_fake: List[float],
-                                  predictions: List[int]) -> Dict[str, Any]:
-        """Aggregate slice-level predictions to volume-level prediction"""
+                                filenames: List[str], 
+                                probs_fake: List[float],
+                                predictions: List[int]) -> Dict[str, Any]:
+        """Aggregate slice-level predictions to volume-level prediction. Matches standalone: majority vote + avg prob."""
         
-        # Calculate volume-level confidence (mean probability of fake)
-        volume_confidence_fake = np.mean(probs_fake)
-        volume_confidence_real = 1 - volume_confidence_fake
+        # Calculate volume-level stats (like standalone)
+        avg_prob_fake = np.mean(probs_fake)
+        num_slices = len(predictions)
+        num_fake = sum(predictions)  # Count of fake preds (1s)
         
-        # Determine volume classification (using 0.5 threshold as in training/standalone)
-        if volume_confidence_fake > 0.5:
+        # Majority vote (exact like standalone)
+        majority_vote = 1 if num_fake >= num_slices / 2 else 0
+        
+        # Final classification & confidence (vote first, fallback to avg if tie)
+        if majority_vote == 1:
             volume_classification = self.types.type2  # "FAKE"
-            volume_confidence = volume_confidence_fake
+            volume_confidence = max(avg_prob_fake, 0.5)  # Use avg for conf, but vote decides
         else:
             volume_classification = self.types.type1  # "REAL"
-            volume_confidence = volume_confidence_real
+            volume_confidence = max(1 - avg_prob_fake, 0.5)
         
         # Identify affected slices (slices predicted as fake)
         affected_slices = [
@@ -134,12 +138,12 @@ class RealFake:
             if predictions[i] == 1  # Fake prediction
         ]
         
-        # Calculate slice-level statistics
+        # Calculate slice-level statistics (enhanced, but core matches)
         slice_stats = {
-            'total_slices': len(filenames),
-            'slices_predicted_real': sum(1 for p in predictions if p == 0),
-            'slices_predicted_fake': sum(1 for p in predictions if p == 1),
-            'mean_fake_confidence': float(np.mean(probs_fake)),
+            'total_slices': num_slices,
+            'slices_predicted_real': num_slices - num_fake,
+            'slices_predicted_fake': num_fake,
+            'mean_fake_confidence': float(avg_prob_fake),
             'std_fake_confidence': float(np.std(probs_fake)),
             'min_fake_confidence': float(np.min(probs_fake)),
             'max_fake_confidence': float(np.max(probs_fake))
@@ -159,11 +163,13 @@ class RealFake:
         return {
             'volume_classification': volume_classification,
             'volume_confidence': float(volume_confidence),
+            'majority_vote': int(majority_vote),  # Add for exact match
+            'avg_prob': float(avg_prob_fake),  # Add for exact match
             'affected_slices': affected_slices,
             'slice_statistics': slice_stats,
             'slice_details': slice_details
         }
-    
+        
     def get_results(self) -> Tuple[int, Any, List[str], Exception]:
         """Main method to get classification results"""
         try:
@@ -183,7 +189,9 @@ class RealFake:
             status = 200
             classification_result = (
                 results['volume_classification'], 
-                results['volume_confidence']
+                results['volume_confidence'],
+                results['majority_vote'],  # Add
+                results['avg_prob']  # Add
             )
             affected_filenames = results['affected_slices']
             
