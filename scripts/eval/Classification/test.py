@@ -200,16 +200,22 @@ def predict_patient(patient_dir, model, model_type="multistream"):
 # Example Run
 # --------------------------------
 if __name__ == "__main__":
-    # ▶ CHANGE THESE 2 PATHS
-    injection = "/home/ashu/capstone/main/data/CT_Injection/1.3.6.1.4.1.14519.5.2.1.6279.6001.106419850406056634877579573537_SD-20251129T201750Z-1-001/1.3.6.1.4.1.14519.5.2.1.6279.6001.106419850406056634877579573537_SD"
-    removal = "/home/ashu/capstone/main/data/CT_Removal/1.3.6.1.4.1.14519.5.2.1.6279.6001.106164978370116976238911317774_SD-20251129T201938Z-1-001/1.3.6.1.4.1.14519.5.2.1.6279.6001.106164978370116976238911317774_SD"
-    REAL1 = "/home/ashu/capstone/main/data/True_Malignant/ff1024e0-d8bc-4a3e-9b2b-8905ec44de3c_cluster2-20251129T202246Z-1-001/ff1024e0-d8bc-4a3e-9b2b-8905ec44de3c_cluster2"
-    REAL2 = "/home/ashu/capstone/main/data/True_Beningn"
-    
-    best_model_ckpt = "/home/ashu/capstone/main/prototype/ct-tampering-detector/pipeline/models/classifier1/dn_phase1_best.pth"
-    model = load_model(best_model_ckpt, model_type="densenet")
-    
-    
-    for idx,path in enumerate([injection,removal,REAL1,REAL2]):
-        print("PREDICTING!!! for class :: ",idx)
-        predict_patient(path, model, model_type="densenet")
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run classifier predictions over sample patient directories.")
+    parser.add_argument("--checkpoint", required=True, help="Path to the classifier checkpoint (e.g. .../pipeline/models/classifier1/dn_phase1_best.pth)")
+    parser.add_argument("--injection", help="Path to a CT_Injection patient directory")
+    parser.add_argument("--removal", help="Path to a CT_Removal patient directory")
+    parser.add_argument("--real", action="append", default=[], dest="real_dirs", help="Path to a real/untampered patient directory (repeatable)")
+    parser.add_argument("--model-type", default="densenet", choices=["densenet", "efficientnet"])
+    args = parser.parse_args()
+
+    model = load_model(args.checkpoint, model_type=args.model_type)
+
+    paths = [p for p in [args.injection, args.removal, *args.real_dirs] if p]
+    if not paths:
+        parser.error("Provide at least one of --injection, --removal, or --real")
+
+    for idx, path in enumerate(paths):
+        print("PREDICTING!!! for class :: ", idx)
+        predict_patient(path, model, model_type=args.model_type)

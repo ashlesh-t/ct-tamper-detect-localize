@@ -1,3 +1,4 @@
+import argparse
 import os
 import xml.etree.ElementTree as ET
 import pandas as pd
@@ -6,14 +7,19 @@ import pydicom
 import numpy as np
 from collections import defaultdict
 
-# Main dataset folder
-main_folder = Path("/mnt/mydata/main")  # UUID folders with DICOMs + XML
+parser = argparse.ArgumentParser(description="Extract tumor centroid coordinates from LIDC-style DICOM+XML annotations.")
+parser.add_argument("--data-root", required=True, help="Path to the dataset folder containing UUID subfolders with DICOMs + XML annotations")
+parser.add_argument("--output-csv", default="centroids_cancer_unique.csv", help="Path to write the output CSV")
+args = parser.parse_args()
+
+# Main dataset folder (UUID folders with DICOMs + XML)
+main_folder = Path(args.data_root)
 
 # Namespace in XML files
 namespace = {'ns': 'http://www.nih.gov'}
 
 # Output CSV
-csv_filename = Path("centroids_cancer_unique.csv").expanduser()
+csv_filename = Path(args.output_csv).expanduser()
 os.makedirs(csv_filename.parent, exist_ok=True)
 
 # Dictionary: key = uuid_folder, value = dict(slice_number -> list of (x, y))

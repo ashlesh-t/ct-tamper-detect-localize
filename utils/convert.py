@@ -1,11 +1,17 @@
+import argparse
 import os
 import numpy as np
 import pydicom
 from pathlib import Path
 
+parser = argparse.ArgumentParser(description="Convert a directory tree of DICOM slices to Hounsfield-unit .npy arrays.")
+parser.add_argument("--input-dir", required=True, help="Root directory containing .dcm files (searched recursively)")
+parser.add_argument("--output-dir", required=True, help="Directory to mirror the input tree into as .npy files")
+args = parser.parse_args()
+
 # Input and output dirs
-input_dir = Path("/mnt/mydata/main")
-output_dir = Path("/mnt/mydata/main2")
+input_dir = Path(args.input_dir)
+output_dir = Path(args.output_dir)
 output_dir.mkdir(parents=True, exist_ok=True)
 
 def dcm_to_hu(dcm_path):

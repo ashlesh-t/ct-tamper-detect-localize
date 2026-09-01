@@ -1,0 +1,12 @@
+# Extra dependencies needed to run the scripts in train/ (Kaggle/Colab-oriented
+# training code). Not needed to run the Streamlit app — see requirements.txt.
+-r requirements.txt
+
+torchvision
+scikit-learn
+numba
+seaborn
+termcolor
+torchinfo
+packaging
+PyWavelets
