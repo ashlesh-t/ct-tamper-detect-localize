@@ -9,17 +9,30 @@ app_port: 7860
 
 # CT Tampering Detector
 
-Dockerized Streamlit Application
+Dockerized Streamlit application for detecting and localizing AI-manipulated
+regions in CT scans. See the [repo-level GETTING_STARTED.md](../../GETTING_STARTED.md)
+for the full walkthrough (env setup, model weights, dataset access).
 
-NOTE: This system is dockerised , access dockerImage.tar  directly from drive using below link
+## Model weights
 
-link : ``
+Checkpoints are not committed to git — download them from the links in
+[`pipeline/models/README.md`](pipeline/models/README.md) and place each file
+in its corresponding `pipeline/models/<name>/` subfolder before running.
 
-1. load .tar file `docker load -i ct_app.tar`
-2. RUN with GPU if available `docker run --gpus all -p 8501:8501 ct-app`
+## Run with Docker
 
-To RUN 
+```bash
+cd prototype/ct-tampering-detector
+docker build -t ct-app .
+docker run --gpus all -p 7860:7860 ct-app   # omit --gpus all if you don't have a GPU
+```
 
-`cd prototype/ct-tampering-detector/`
+Then open http://localhost:7860.
 
-do all chores or just run the docker image by  downloading .tar
+## Run locally without Docker
+
+```bash
+cd prototype/ct-tampering-detector
+pip install -r requirements.txt
+streamlit run app.py
+```

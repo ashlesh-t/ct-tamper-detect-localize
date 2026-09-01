@@ -1,17 +1,8 @@
-streamlit==1.38.0
-numpy
-opencv-python
-matplotlib
-plotly
-pydicom
-nibabel
-SimpleITK
-pillow
-scikit-image
-streamlit-player
-streamlit-option-menu
-streamlit-drawable-canvas
-torch
-pandas
-segmentation_models_pytorch
-albumentations
+# App dependencies — mirrors prototype/ct-tampering-detector/requirements.txt,
+# the authoritative list used by the Dockerfile. Kept identical here so
+# `pip install -r requirements.txt` works from the repo root for local dev.
+-r prototype/ct-tampering-detector/requirements.txt
+
+# Test/dev tooling (see tests/unit/, .github/workflows/tests.yml)
+pytest
+pytest-cov
